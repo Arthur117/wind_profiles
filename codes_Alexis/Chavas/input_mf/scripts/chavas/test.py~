@@ -1,0 +1,21 @@
+import sys
+
+import numpy as np
+
+sys.path.append('/home/amouche/PythonTool/palette')
+from palette import *
+
+sys.path.append('/home/amouche/science/hurricanes/Chavas/input_mf/scripts/chavas')
+import CLE15
+
+
+Rfit = np.array([350,350,350])
+Vfit = 17
+Az   = np.array([0,90,180])
+Vmax = 25 
+Vfm  = 5 
+Dfm  = 0
+Lat  = 20.
+Rlim = 800 # outer core limit
+
+RRF, WWF, xf,yf = CLE15.glochv(Rfit,Vfit,Az,Vmax,Vfm,Dfm,Lat,Rlim)

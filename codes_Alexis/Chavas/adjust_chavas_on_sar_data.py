@@ -1,0 +1,84 @@
+import os
+import numpy as np
+
+import pdb
+import pickle
+
+import matplotlib.pyplot as plt
+
+from ER11E04_nondim_rfitinput import ER11E04_nondim_rfitinput
+
+def adjust_chavas_on_sar_data(_file):
+
+    _file_out = 'Chavas' + os.path.basename(_file)[24:-4]+'.png'
+    print('### ' + _file_out)
+    
+    res = pickle.load(open(_file,'rb'))
+    #pdb.set_trace()
+    
+    spd_wn0 = res['spd_pol_cmpnts'][0,:,:]
+    spd_wn1 = res['spd_pol_cmpnts'][1,:,:]
+    spd_wn_0to1 = np.sum(res['spd_pol_cmpnts'][0:1,:,:],0)
+    spd = np.sum(res['spd_pol_cmpnts'],0)
+    xx_grid = res['xx_grid']
+    yy_grid = res['yy_grid']
+    radius_grid = res['radius_grid']
+    azimuth_grid = res['azimuth_grid']
+    
+    azimuth = azimuth_grid[0,:]
+    radius = radius_grid[:,0]
+
+    ind = np.argmax(spd_wn_0to1)
+    spd_wn_0to1.flatten()[ind]
+    radmax = radius_grid.flatten()[ind]
+    azimax = azimuth_grid.flatten()[ind]
+    imax = np.argmin(np.abs(azimax-azimuth))
+    
+    spd_wn_0to1_profil = spd_wn_0to1[:,imax]
+    Vfit = 17
+    Vmax = np.max(spd_wn_0to1)
+    Rmax = radius[np.argmax(spd_wn_0to1_profil)]
+    _radius = radius[radius>Rmax]
+    _spdprf = spd_wn_0to1_profil[radius>Rmax]
+    if np.min(np.abs(_spdprf-Vfit))>0.5:
+        return 1
+    Rfit = _radius[np.argmin(np.abs(_spdprf-Vfit))]
+    Lat  = res['center_lat']
+    
+    #pdb.set_trace()
+    
+    #=======================================
+    # Default Parameters
+    #=======================================
+    
+    #fcor = 5e-5                    #[s-1] {5e-5} Coriolis parameter at storm center
+    omega=2*np.pi/(24*3600)
+    fcor=2*omega*np.sin(Lat*np.pi/180)
+    # vfm1=5.7
+
+    ## Environmental parameters
+    ##Outer region
+    Cdvary = 1                     #[-] {1} 0 : Outer region Cd = constant (defined on next line) 1 : Outer region Cd = f(V) (empirical 	Donelan et al. 2004)
+    Cd = 1.5e-3                #[-] {1.5e-3} ignored if Cdvary = 1 surface momentum exchange (i.e. drag) coefficient
+    w_cool = 2/1000                #[ms-1] {2/1000 Chavas et al 2015} radiative-subsidence rate in the rain-free tropics above the boundary layer top
+
+    ##Inner region
+    CkCdvary = 1                   #[-] {1} 0 : Inner region Ck/Cd = constant (defined on next line) 1 : Inner region Ck/Cd = f(Vmax) (empirical Chavas et al. 2015)
+    CkCd = 1                   #[-] {1} ignored if CkCdvary = 1 ratio of surface exchange coefficients of enthalpy and momentum capped at 1.9 (things get weird >=2)
+    
+    ## Eye adjustment
+    eye_adj = 0                    #[-] {1} 0 = use ER11 profile in eye 1 = empirical adjustment
+    alpha_eye = .15            #[-] {.15 empirical Chavas et al 2015} V/Vm in eye is reduced by factor (r/rm)^alpha_eye ignored if eye_adj=0
+
+
+
+    #pdb.set_trace()
+    ## Get profile: rfit input
+    rr,VV,rmax,r0,rmerge,Vmerge= ER11E04_nondim_rfitinput(Vmax,Rfit,Vfit,fcor,Cdvary,Cd,w_cool,CkCdvary,CkCd,eye_adj,alpha_eye)
+
+
+    fig=plt.figure()
+    plt.plot(rr/1000.,VV); plt.grid()
+    plt.plot(radius/1000,spd_wn_0to1_profil)
+    plt.xlim(0,np.max(radius)/1000)
+    plt.savefig(_file_out)

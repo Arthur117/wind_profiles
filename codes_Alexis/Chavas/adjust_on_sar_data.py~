@@ -1,0 +1,81 @@
+
+import numpy as np
+
+import pdb
+
+import matplotlib.pyplot as plt
+
+from ER11E04_nondim_rfitinput import ER11E04_nondim_rfitinput
+
+##=======================================
+## Storm parameters from SAR
+##=======================================
+
+Vmax = 57                      #[ms-1] {50} maximum azimuthal-mean wind speed
+Rfit = 100*1000                #[m] {300*1000} a wind radius
+Vfit = 17                      #[m] {12} wind speed at rfit
+Lat  = 12.3
+
+_file = 'polar_analysis_synthesis_s1b-ew-owi-cm-20180818t083657-20180818t084001-000003-016B1D_gd.pkl'
+_file = 'polar_analysis_synthesis_s1a-ew-owi-cm-20180818t150300-20180818t150604-000003-0288C3_gd.pkl'
+res = pickle.load(open(_file,'rb'))
+
+spd_wn0 = res['spd_pol_cmpnts'][0,:,:]
+spd_wn1 = res['spd_pol_cmpnts'][1,:,:]
+spd_wn_0to1 = np.sum(res['spd_pol_cmpnts'][0:1,:,:],0)
+spd = np.sum(res['spd_pol_cmpnts'],0)
+xx_grid = res['xx_grid']
+yy_grid = res['yy_grid']
+radius_grid = res['radius_grid']
+azimuth_grid = res['azimuth_grid']
+
+azimuth = azimuth_grid[0,:]
+radius = radius_grid[:,0]
+
+
+ind = np.argmax(spd_wn_0to1)
+spd_wn_0to1.flatten()[ind]
+radmax = radius_grid.flatten()[ind]
+azimax = azimuth_grid.flatten()[ind]
+imax = np.argmin(np.abs(azimax-azimuth))
+
+
+Vfit = 17
+Vmax = np.max(spd_wn_0to1)
+Rfit = radmax
+Lat  = res['center_lat']
+
+
+#=======================================
+# Default Parameters
+#=======================================
+
+#fcor = 5e-5                    #[s-1] {5e-5} Coriolis parameter at storm center
+omega=2*np.pi/(24*3600)
+fcor=2*omega*np.sin(Lat*np.pi/180)
+# vfm1=5.7
+
+## Environmental parameters
+##Outer region
+Cdvary = 1                     #[-] {1} 0 : Outer region Cd = constant (defined on next line) 1 : Outer region Cd = f(V) (empirical 	Donelan et al. 2004)
+Cd = 1.5e-3                #[-] {1.5e-3} ignored if Cdvary = 1 surface momentum exchange (i.e. drag) coefficient
+w_cool = 2/1000                #[ms-1] {2/1000 Chavas et al 2015} radiative-subsidence rate in the rain-free tropics above the boundary layer top
+
+##Inner region
+CkCdvary = 1                   #[-] {1} 0 : Inner region Ck/Cd = constant (defined on next line) 1 : Inner region Ck/Cd = f(Vmax) (empirical Chavas et al. 2015)
+CkCd = 1                   #[-] {1} ignored if CkCdvary = 1 ratio of surface exchange coefficients of enthalpy and momentum capped at 1.9 (things get weird >=2)
+
+## Eye adjustment
+eye_adj = 0                    #[-] {1} 0 = use ER11 profile in eye 1 = empirical adjustment
+alpha_eye = .15            #[-] {.15 empirical Chavas et al 2015} V/Vm in eye is reduced by factor (r/rm)^alpha_eye ignored if eye_adj=0
+
+
+
+#pdb.set_trace()
+## Get profile: rfit input
+rr,VV,rmax,r0,rmerge,Vmerge= ER11E04_nondim_rfitinput(Vmax,Rfit,Vfit,fcor,Cdvary,Cd,w_cool,CkCdvary,CkCd,eye_adj,alpha_eye)
+
+
+fig=plt.figure()
+plt.plot(rr/1000.,VV); plt.grid()
+plt.savefig('profil.png')
