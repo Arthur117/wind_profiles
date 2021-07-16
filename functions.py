@@ -773,6 +773,94 @@ def save_curves(i, file, ds, r, spdm, INI, FIT):
     
     return True
 
+#================================= B SENSITIVITY FUNCTIONS =====================================
+
+def initialize_B_sensitivity_experiment(spdm, power_law):
+    '''Given the spdm of a SAR image, returns the radii R1 (= Rmax) and R2, as well as V1 (=Vmax) and V2, and Vmin.
+    V2 is computed as a cubic fraction of Vmax. Then R2 is derived accordingly.'''
+    p    = power_law # test 2 and 3
+    R1   = np.argmax(spdm[:200])
+    V1   = spdm[R1]
+    Vmin = np.nanmin(spdm)
+    V2   = (1 - (V1 ** p / ((V1 + Vmin) ** p))) * V1
+    diff = np.abs(spdm - V2)
+    R2   = (np.argmin(diff[R1:]) + R1) # We look for R2 to the right of Rmax (R1)
+    return R1, R2, V1, V2, Vmin
+
+def initialize_A_and_B(rho, Lat, pn, pc, Rmax, Vmax):
+    B     = (Vmax ** 2) * rho * np.e / (pn - pc)
+    A     = Rmax ** B
+    return Lat, pn, pc, A, B 
+
+def B_sensitivity_holland_profile(r, rho, Lat, pn, pc, Vmin, A, B):
+    '''Returns the Holland profile (that will be used separately on the 3 pieces), as a function of A and B (rather than Vmax and Rmax)'''
+    fcor  = coriolis(Lat)
+    V   = Vmin + np.sqrt(A * B * (pn - pc) * np.exp((-1) * A / (r ** B)) / (rho * r ** B) + (r ** 2 * fcor ** 2) / 4) - (r * fcor / 2)
+    return V
+    
+def B_sensitivity_complete_profile(r, rho, Lat, R1, R2, pn, pc, Vmin, A, B0, B1, B2):
+    '''Given some arguments, returns the complete profile, composed of 3 Holland profiles '''
+    V              = r * 0. # initialize
+    Vi             = B_sensitivity_holland_profile(r, rho, Lat, pn, pc, Vmin, A, B0)
+    Vtrans         = B_sensitivity_holland_profile(r, rho, Lat, pn, pc, Vmin, A, B1)
+    Vo             = B_sensitivity_holland_profile(r, rho, Lat, pn, pc, Vmin, A, B2)
+    r_under_R1     = (r <= R1)
+    r_in_between   = (r > R1) & (r < R2)
+    r_over_R2      = (r >= R2)
+    V[r_under_R1]  = Vi[r_under_R1]
+    V[r_in_between]= Vtrans[r_in_between]
+    V[r_over_R2]   = Vo[r_over_R2]
+    return V
+
+def fit_B_sensitivity_experiment(r, spdm, rho, Lat, R1, R2, pn, pc, Vmin, A, B, print_values):
+    popt, pcov = curve_fit(lambda r, pn, pc, Vmin, A, B0, B1, B2: B_sensitivity_complete_profile(r, rho, Lat, R1, R2, pn, pc, Vmin, A, B0, B1, B2), r, spdm, p0=[pn, pc, Vmin, A, B, B, B], bounds=((850 * 100, 850 * 100, 0, 0, 0, 0, 0), (1100 * 100, 1100 * 100, 50, 10000, 3, 3, 3))) # Lat, rho, R1, R2 are fixed
+    pn, pc, Vmin, A, B0, B1, B2 = popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6]
+    if print_values:
+        print(
+            'B SENSITIVITY - Fit values',
+            '\n pn_fit   =', "{:.2f}".format(pn),
+            '\n pc_fit   =', "{:.2f}".format(pc),
+            '\n Vmin_fit =', "{:.2f}".format(Vmin),
+            '\n A_fit    =', "{:.2f}".format(A),
+            '\n B0_fit   =', "{:.2f}".format(B0),
+            '\n B1_fit   =', "{:.2f}".format(B1),
+            '\n B2_fit   =', "{:.2f}".format(B2)
+        )
+    return pn, pc, Vmin, A, B0, B1, B2
+
+def plot_B_sensitivty_experiment(i, file, r, spdm, FIT):
+    # Compute fitted profiles
+    V_holland              = holland_profile(r, *FIT['B_sens'])
+    
+    Rmax          = np.argmax(spdm[:200]) # center on Rmax
+    # Compute indexes to print in the right window (for Chavas profile only)
+    
+    # Title
+    plt.figure(figsize=(18, 8))
+    plt.suptitle('N°' + '%d'%i + ": " + os.path.basename(file), fontsize=14)
+    
+    # Large scale
+    plt.subplot(1, 2, 1)
+    fig1 = plt.plot(r, spdm, color='k', linewidth=3,            label='SAR-derived wind speed')    # V_obs
+    fig3 = plt.plot(r, V_holland, color='steelblue',            label='Holland profile')           # V_holland  
+    
+    plt.xlabel('Radius (km)')
+    plt.ylabel('Wind speed (m/s)')
+    plt.legend();plt.grid()
+
+    # Small scale
+    plt.subplot(1, 2, 2)
+    if Rmax >= 25:
+        fig6 = plt.plot(r[Rmax - 25 : Rmax + 25], spdm[Rmax - 25 : Rmax + 25], color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+        fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label='Holland profile')       # V_holland
+    else:
+        fig6 = plt.plot(r[:50], spdm[:50], color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+        fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label='Holland profile')       # V_holland
+
+    plt.xlabel('Radius (km)')
+    plt.ylabel('Wind speed (m/s)')
+    plt.legend();plt.grid()
+    return True
 
 #=====================DEBUG======================+-
 
