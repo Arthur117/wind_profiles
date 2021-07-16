@@ -8,26 +8,9 @@ from scipy.optimize import curve_fit
 from shapely.geometry import Point, LineString
 import os.path
 
-def printWS_ggd(path):
-    '''Given the path of a _gd file, print the wind speed of the image'''
-    ds = xr.open_dataset(path)
-    # No need for np.array()?
-    ws = np.array(ds['wind_speed'])
-    xx = np.array(ds['x'])
-    yy = np.array(ds['y'])
-    plt.pcolormesh(xx, yy, ws[0, :, :])
-    
-def printWS(path):
-    '''Given the path of a _rotated file, print the wind speed of the image'''
-    ds = xr.open_dataset(path)
-    plt.pcolormesh(ds['x'], ds['y'], ds['wind_speed'])
-    
-def coriolis(lat):
-    '''Latitude must be in degrees.'''
-    Omega = 7.2921e-5                            # Earth rotation vector
-    f     = 2 * Omega * np.sin(lat * np.pi / 180) # Coriolis parameter at 20° latitude and assuming it's constant 
-    return f
+#================================= PROFILE FUNCTIONS =====================================
 
+#Chavas
 def ER11E04_nondim_rfitinput(Vmax, rfit, Vfit, fcor, Cdvary, C_d, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye): 
 
     ## Initialization
@@ -301,11 +284,6 @@ def ER11_radprof_raw(Vmax, r_in, rmax_or_r0, fcor, CkCd, rr_ER11, eyealpha=1):
         print('rmax_or_r0 must be set to"rmax"')
     return V_ER11, r_out
 
-
-import numpy as np
-
-import pdb
-
 def E04_outerwind_r0input_nondim_MM0(r0, fcor, Cdvary, C_d, w_cool, Nr):
     
     ## Initialization
@@ -376,7 +354,61 @@ def E04_outerwind_r0input_nondim_MM0(r0, fcor, Cdvary, C_d, w_cool, Nr):
 
     return rrfracr0,MMfracM0
 
-#================================= OTHER FUNCTIONS =====================================
+def initialize_chavas(spdm, Lat, print_values):
+    '''Initialize the values of Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye for the Chavas profile.'''
+    ### STORM PARAMETERS (Vmax, Vfit, Rfit, and Lat)
+    Vmax = np.max(spdm[:200])                      #[ms-1] {50} maximum azimuthal-mean wind speed
+    Vfit = 17                                      #[ms-1] {12} wind speed at Rfit
+    Rmax = np.argmax(spdm[:200])                   #To compute Rfit
+    diff = np.abs(spdm - Vfit)                     #To compute Rfit
+    Rfit = (np.argmin(diff[Rmax:]) + Rmax) * 1000  #[m] {300*1000} a wind radius
+    Lat  = Lat                                     #[°]         latitude of storm center
+
+    ### DEFAULT PARAMETERS
+    fcor = coriolis(Lat)         #[s-1]  {5e-5} Coriolis parameter at storm center
+
+    ### ENVIRONMENTAL PARAMETERS
+    # Outer region
+    Cdvary    = 1                  #[-]    {1} 0 : Outer region Cd = constant (defined on next line) 1 : Outer region Cd = f(V) (empirical 	Donelan et al. 2004)
+    Cd        = 1.5e-3             #[-]    {1.5e-3} ignored if Cdvary = 1 surface momentum exchange (i.e. drag) coefficient
+    w_cool    = 2/1000             #[ms-1] {2/1000 Chavas et al 2015} radiative-subsidence rate in the rain-free tropics above the boundary layer top
+    # Inner region
+    CkCdvary  = 1                  #[-]    {1} 0 : Inner region Ck/Cd = constant (defined on next line) 1 : Inner region Ck/Cd = f(Vmax) (empirical Chavas et al. 2015)
+    CkCd      = 1                  #[-]    {1} ignored if CkCdvary = 1 ratio of surface exchange coefficients of enthalpy and momentum capped at 1.9 (things get weird >=2)
+    # Eye adjustment
+    eye_adj   = 0                  #[-]    {1} 0 = use ER11 profile in eye 1 = empirical adjustment
+    alpha_eye = .15                #[-]    {.15 empirical Chavas et al 2015} V/Vm in eye is reduced by factor (r/rm)^alpha_eye ignored if eye_adj=0
+    if print_values:
+        print(
+            'CHAVAS - Initial values',
+            '\n Vmax_ini  =', "{:.2f}".format(Vmax),
+            '\n Rfit_ini  =', "{:.2f}".format(Rfit),
+            '\n Vfit_ini  =', "{:.2f}".format(Vfit),
+            '\n fcor      =', "{:.2f}".format(fcor),
+            '\n Cdvary    =', "{:.2f}".format(Cdvary),
+            '\n Cd        =', "{:.2f}".format(Cd),
+            '\n w_cool    =', "{:.2f}".format(w_cool),
+            '\n CkCdvary  =', "{:.2f}".format(CkCdvary),
+            '\n CkCd      =', "{:.2f}".format(CkCd),
+            '\n eye_adj   =', "{:.2f}".format(eye_adj),
+            '\n alpha_eye =', "{:.2f}".format(alpha_eye)
+        )
+    return Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye
+
+def fit_chavas(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye, print_values):
+    '''Returns the VV and rr associated to Chavas (different than other profiles), as well as optimal Rmax, r0, Rmerge and Vmerge.'''
+    rr, VV, rmax, r0, rmerge, Vmerge = ER11E04_nondim_rfitinput(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye)
+    if print_values:
+        print(
+            'CHAVAS - Fit values',
+            '\n Rmax_fit   =', "{:.2f}".format(Rmax),
+            '\n R0_fit     =', "{:.2f}".format(r0),
+            '\n Rmerge_fit =', "{:.2f}".format(rmerge),
+            '\n Vmerge_fit =', "{:.2f}".format(Vmerge)
+
+        )
+    return rr, VV, rmax, r0, rmerge, Vmerge
+
 # Rankine
 def rankine_profile(r, x, alpha, Vmin, Rmax):
     '''We assume V = alpha * r inside and V * r ^ x = alpha outside'''
@@ -505,7 +537,7 @@ def initialize_willoughby(spdm, n, print_values):
 def fit_willoughby_no_smooth(r, spdm, n, X1, Vmin, Rmax, Vmax, print_values):
     '''Fit the Willoughby profile given initial values of n, X1, Vmin, Rmax, Vmax.
     Returns the optimal parameters found with curve_fit()'''
-    popt, pcov              = curve_fit(willoughby_profile_no_smooth, r, spdm, p0=[n, X1, Vmin, Rmax, Vmax], bounds=((0, 0, 0, 5, 0), (1100 * 100, 1100 * 100, 50, 500, 200)))
+    popt, pcov              = curve_fit(willoughby_profile_no_smooth, r, spdm, p0=[n, X1, Vmin, Rmax, Vmax], bounds=((0, 0, 0, 5, 0), (50, 5000, 50, 500, 200)))
     n, X1, Vmin, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3], popt[4]
     if print_values:
         print(
@@ -518,63 +550,27 @@ def fit_willoughby_no_smooth(r, spdm, n, X1, Vmin, Rmax, Vmax, print_values):
         )
     return n, X1, Vmin, Rmax, Vmax
 
-# Chavas
-def initialize_chavas(spdm, Lat, print_values):
-    '''Initialize the values of Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye for the Chavas profile.'''
-    ### STORM PARAMETERS (Vmax, Vfit, Rfit, and Lat)
-    Vmax = np.max(spdm[:200])                      #[ms-1] {50} maximum azimuthal-mean wind speed
-    Vfit = 17                                      #[ms-1] {12} wind speed at Rfit
-    Rmax = np.argmax(spdm[:200])                   #To compute Rfit
-    diff = np.abs(spdm - Vfit)                     #To compute Rfit
-    Rfit = (np.argmin(diff[Rmax:]) + Rmax) * 1000  #[m] {300*1000} a wind radius
-    Lat  = Lat                                     #[°]         latitude of storm center
+#================================= OTHER FUNCTIONS =====================================
+def printWS_ggd(path):
+    '''Given the path of a _gd file, print the wind speed of the image'''
+    ds = xr.open_dataset(path)
+    # No need for np.array()?
+    ws = np.array(ds['wind_speed'])
+    xx = np.array(ds['x'])
+    yy = np.array(ds['y'])
+    plt.pcolormesh(xx, yy, ws[0, :, :])
+    
+def printWS(path):
+    '''Given the path of a _rotated file, print the wind speed of the image'''
+    ds = xr.open_dataset(path)
+    plt.pcolormesh(ds['x'], ds['y'], ds['wind_speed'])
+    
+def coriolis(lat):
+    '''Latitude must be in degrees.'''
+    Omega = 7.2921e-5                            # Earth rotation vector
+    f     = 2 * Omega * np.sin(lat * np.pi / 180) # Coriolis parameter at 20° latitude and assuming it's constant 
+    return f
 
-    ### DEFAULT PARAMETERS
-    fcor = coriolis(Lat)         #[s-1]  {5e-5} Coriolis parameter at storm center
-
-    ### ENVIRONMENTAL PARAMETERS
-    # Outer region
-    Cdvary    = 1                  #[-]    {1} 0 : Outer region Cd = constant (defined on next line) 1 : Outer region Cd = f(V) (empirical 	Donelan et al. 2004)
-    Cd        = 1.5e-3             #[-]    {1.5e-3} ignored if Cdvary = 1 surface momentum exchange (i.e. drag) coefficient
-    w_cool    = 2/1000             #[ms-1] {2/1000 Chavas et al 2015} radiative-subsidence rate in the rain-free tropics above the boundary layer top
-    # Inner region
-    CkCdvary  = 1                  #[-]    {1} 0 : Inner region Ck/Cd = constant (defined on next line) 1 : Inner region Ck/Cd = f(Vmax) (empirical Chavas et al. 2015)
-    CkCd      = 1                  #[-]    {1} ignored if CkCdvary = 1 ratio of surface exchange coefficients of enthalpy and momentum capped at 1.9 (things get weird >=2)
-    # Eye adjustment
-    eye_adj   = 0                  #[-]    {1} 0 = use ER11 profile in eye 1 = empirical adjustment
-    alpha_eye = .15                #[-]    {.15 empirical Chavas et al 2015} V/Vm in eye is reduced by factor (r/rm)^alpha_eye ignored if eye_adj=0
-    if print_values:
-        print(
-            'CHAVAS - Initial values',
-            '\n Vmax_ini  =', "{:.2f}".format(Vmax),
-            '\n Rfit_ini  =', "{:.2f}".format(Rfit),
-            '\n Vfit_ini  =', "{:.2f}".format(Vfit),
-            '\n fcor      =', "{:.2f}".format(fcor),
-            '\n Cdvary    =', "{:.2f}".format(Cdvary),
-            '\n Cd        =', "{:.2f}".format(Cd),
-            '\n w_cool    =', "{:.2f}".format(w_cool),
-            '\n CkCdvary  =', "{:.2f}".format(CkCdvary),
-            '\n CkCd      =', "{:.2f}".format(CkCd),
-            '\n eye_adj   =', "{:.2f}".format(eye_adj),
-            '\n alpha_eye =', "{:.2f}".format(alpha_eye)
-        )
-    return Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye
-
-def fit_chavas(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye, print_values):
-    '''Returns the VV and rr associated to Chavas (different than other profiles), as well as optimal Rmax, r0, Rmerge and Vmerge.'''
-    rr, VV, rmax, r0, rmerge, Vmerge = ER11E04_nondim_rfitinput(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye)
-    if print_values:
-        print(
-            'CHAVAS - Fit values',
-            '\n Rmax_fit   =', "{:.2f}".format(Rmax),
-            '\n R0_fit     =', "{:.2f}".format(r0),
-            '\n Rmerge_fit =', "{:.2f}".format(rmerge),
-            '\n Vmerge_fit =', "{:.2f}".format(Vmerge)
-
-        )
-    return rr, VV, rmax, r0, rmerge, Vmerge
-
-# Common functions
 def compute_mean_wind_spd(ds, r_window_len):
     '''Returns azimuthal-mean total (not azimuthal) wind speed'''
     # Define (r, theta) grid
