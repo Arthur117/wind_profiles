@@ -775,7 +775,28 @@ def save_curves(i, file, ds, r, spdm, INI, FIT):
 
 #================================= B SENSITIVITY FUNCTIONS =====================================
 
-def initialize_B_sensitivity_experiment(spdm, power_law):
+def initialize_B_sensitivity_experiment(spdm, power_law, rho, Lat, pn, pc, print_values):
+    Lat                  = np.float64(Lat)
+    R1, R2, V1, V2, Vmin = initialize_radii(spdm, power_law)
+    Lat, pn, pc, A, B    = initialize_A_and_B(rho, Lat, pn, pc, Rmax=R1, Vmax=V1)
+    if print_values:
+        print(
+            'B SENSITIVITY - Initial values',
+            '\n rho_ini  =', "{:.2f}".format(rho),
+            '\n Lat_ini  =', "{:.2f}".format(Lat),
+            '\n R1_ini   =', "{:.2f}".format(R1),
+            '\n R2_ini   =', "{:.2f}".format(R2),
+            '\n V1_ini   =', "{:.2f}".format(V1),
+            '\n V2_ini   =', "{:.2f}".format(V2),
+            '\n pn_ini   =', "{:.2f}".format(pn),
+            '\n pc_ini   =', "{:.2f}".format(pc),
+            '\n Vmin_ini =', "{:.2f}".format(Vmin),
+            '\n A_ini    =', "{:.2f}".format(A),
+            '\n B_ini    =', "{:.2f}".format(B)
+        )
+    return rho, Lat, R1, R2, V1, V2, pn, pc, Vmin, A, B
+
+def initialize_radii(spdm, power_law):
     '''Given the spdm of a SAR image, returns the radii R1 (= Rmax) and R2, as well as V1 (=Vmax) and V2, and Vmin.
     V2 is computed as a cubic fraction of Vmax. Then R2 is derived accordingly.'''
     p    = power_law # test 2 and 3
@@ -812,7 +833,8 @@ def B_sensitivity_complete_profile(r, rho, Lat, R1, R2, pn, pc, Vmin, A, B0, B1,
     V[r_over_R2]   = Vo[r_over_R2]
     return V
 
-def fit_B_sensitivity_experiment(r, spdm, rho, Lat, R1, R2, pn, pc, Vmin, A, B, print_values):
+def fit_B_sensitivity_experiment(r, spdm, rho, Lat, R1, R2, V1, V2, pn, pc, Vmin, A, B, print_values):
+    '''Note: V1 and V2 are useless but they are contained in INI so they are passed as arguments here.'''
     popt, pcov = curve_fit(lambda r, pn, pc, Vmin, A, B0, B1, B2: B_sensitivity_complete_profile(r, rho, Lat, R1, R2, pn, pc, Vmin, A, B0, B1, B2), r, spdm, p0=[pn, pc, Vmin, A, B, B, B], bounds=((850 * 100, 850 * 100, 0, 0, 0, 0, 0), (1100 * 100, 1100 * 100, 50, 10000, 3, 3, 3))) # Lat, rho, R1, R2 are fixed
     pn, pc, Vmin, A, B0, B1, B2 = popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6]
     if print_values:
@@ -828,12 +850,19 @@ def fit_B_sensitivity_experiment(r, spdm, rho, Lat, R1, R2, pn, pc, Vmin, A, B, 
         )
     return pn, pc, Vmin, A, B0, B1, B2
 
-def plot_B_sensitivty_experiment(i, file, r, spdm, FIT):
-    # Compute fitted profiles
-    V_holland              = holland_profile(r, *FIT['B_sens'])
+def plot_B_sensitivity_experiment(i, file, r, spdm, INI, FIT):
+    # Compute fitted profile and fitted parameters
+    rho, Lat, _, _, R1, R2, _, _, _, _, _ = INI['B_sens']
+    V_fit                                 = B_sensitivity_complete_profile(r, rho, Lat, R1, R2, *FIT['B_sens'])
+    V_holland                             = holland_profile(r, *FIT['Holland'])
+    Rmax                                  = np.argmax(spdm[:200]) # to center on Rmax
+    _, pn, pc, _, Rmax_fit, Vmax_fit      = FIT['Holland'] # Lat, pn, pc, Vmin, Rmax, Vmax
+    _, _, _, A_fit, B_fit                 = initialize_A_and_B(rho, Lat, pn, pc, Rmax_fit, Vmax_fit)
+    _, _, _, A_sen, B0_sen, B1_sen, B2_sen= FIT['B_sens']  # pn, pc, Vmin, A, B0, B1, B2
     
-    Rmax          = np.argmax(spdm[:200]) # center on Rmax
-    # Compute indexes to print in the right window (for Chavas profile only)
+    # Compute RMSEs
+    holland_rmse = rmse(V_holland, spdm)
+    B_sens_rmse  = rmse(V_fit,     spdm)
     
     # Title
     plt.figure(figsize=(18, 8))
@@ -841,8 +870,9 @@ def plot_B_sensitivty_experiment(i, file, r, spdm, FIT):
     
     # Large scale
     plt.subplot(1, 2, 1)
-    fig1 = plt.plot(r, spdm, color='k', linewidth=3,            label='SAR-derived wind speed')    # V_obs
-    fig3 = plt.plot(r, V_holland, color='steelblue',            label='Holland profile')           # V_holland  
+    fig1 = plt.plot(r, spdm, color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+    fig2 = plt.plot(r, V_holland, color='steelblue', label='Holland profile; A_fit = ' + "{:.2f}".format(A_fit) + '; B_fit = ' + "{:.2f}".format(B_fit) + '; => RMSE = ' + "{:.2f}".format(holland_rmse)) # V_holland
+    fig3 = plt.plot(r, V_fit, color='fuchsia',       label='Piecewise Holland; A = ' + "{:.2f}".format(A_sen) + '; B0 = ' + "{:.2f}".format(B0_sen) + ';\n B1 = ' + "{:.2f}".format(B1_sen) + '; B2 = ' + "{:.2f}".format(B2_sen) + ';                                  => RMSE = ' + "{:.2f}".format(B_sens_rmse)) # V_fit  
     
     plt.xlabel('Radius (km)')
     plt.ylabel('Wind speed (m/s)')
@@ -851,16 +881,22 @@ def plot_B_sensitivty_experiment(i, file, r, spdm, FIT):
     # Small scale
     plt.subplot(1, 2, 2)
     if Rmax >= 25:
-        fig6 = plt.plot(r[Rmax - 25 : Rmax + 25], spdm[Rmax - 25 : Rmax + 25], color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
-        fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label='Holland profile')       # V_holland
+        fig4 = plt.plot(r[Rmax - 25 : Rmax + 25], spdm[Rmax - 25 : Rmax + 25],  color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+        fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label='Holland profile')        # V_holland
+        fig6 = plt.plot(r[Rmax - 25 : Rmax + 25], V_fit[Rmax - 25 : Rmax + 25], color='fuchsia',        label='V_fit')                  # V_fit
     else:
-        fig6 = plt.plot(r[:50], spdm[:50], color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
-        fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label='Holland profile')       # V_holland
+        fig4 = plt.plot(r[:50], spdm[:50],  color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+        fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label='Holland profile')        # V_holland
+        fig6 = plt.plot(r[:50], V_fit[:50], color='fuchsia',        label='V_fit')                  # V_fit
 
     plt.xlabel('Radius (km)')
     plt.ylabel('Wind speed (m/s)')
     plt.legend();plt.grid()
     return True
+
+def rmse(predictions, targets):
+    return np.sqrt(np.mean((predictions - targets) ** 2))
+
 
 #=====================DEBUG======================+-
 
