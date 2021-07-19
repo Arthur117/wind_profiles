@@ -488,7 +488,7 @@ def initialize_holland(spdm, Lat, pn, pc, print_values):
 def fit_holland(r, spdm, Lat, pn, pc, Vmin, Rmax, Vmax, print_values):
     '''Fit the Holland profile given initial values of Lat, pn, pc, Vmin, Rmax and Vmax.
     Returns the optimal parameters found with curve_fit()'''
-    popt, pcov = curve_fit(lambda r, pn, pc, Vmin, Rmax, Vmax: holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax), r, spdm, p0=[pn, pc, Vmin, Rmax, Vmax], bounds=((850 * 100, 850 * 100, 0, 5, 0), (1100 * 100, 1100 * 100, 50, 500, 200))) # Lat is fixed
+    popt, pcov = curve_fit(lambda r, pn, pc, Vmin, Rmax, Vmax: holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax), r, spdm, p0=[pn, pc, Vmin, Rmax, Vmax], bounds=((1000 * 100, 850 * 100, 0, 5, 0), (1100 * 100, 1000 * 100, 50, 500, 200))) # Lat is fixed
     pn, pc, Vmin, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3], popt[4]
     if print_values:
         print(
@@ -835,7 +835,7 @@ def B_sensitivity_complete_profile(r, rho, Lat, R1, R2, pn, pc, Vmin, A, B0, B1,
 
 def fit_B_sensitivity_experiment(r, spdm, rho, Lat, R1, R2, V1, V2, pn, pc, Vmin, A, B, print_values):
     '''Note: V1 and V2 are useless but they are contained in INI so they are passed as arguments here.'''
-    popt, pcov = curve_fit(lambda r, pn, pc, Vmin, A, B0, B1, B2: B_sensitivity_complete_profile(r, rho, Lat, R1, R2, pn, pc, Vmin, A, B0, B1, B2), r, spdm, p0=[pn, pc, Vmin, A, B, B, B], bounds=((850 * 100, 850 * 100, 0, 0, 0, 0, 0), (1100 * 100, 1100 * 100, 50, 10000, 3, 3, 3))) # Lat, rho, R1, R2 are fixed
+    popt, pcov = curve_fit(lambda r, pn, pc, Vmin, A, B0, B1, B2: B_sensitivity_complete_profile(r, rho, Lat, R1, R2, pn, pc, Vmin, A, B0, B1, B2), r, spdm, p0=[pn, pc, Vmin, A, B, B, B], bounds=((1000 * 100, 850 * 100, 0, 0, 0, 0, 0), (1100 * 100, 1000 * 100, 50, 10000, 3, 3, 3))) # Lat, rho, R1, R2 are fixed
     pn, pc, Vmin, A, B0, B1, B2 = popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6]
     if print_values:
         print(
