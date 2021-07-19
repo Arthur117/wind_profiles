@@ -833,6 +833,22 @@ def B_sensitivity_complete_profile(r, rho, Lat, R1, R2, pn, pc, Vmin, A, B0, B1,
     V[r_over_R2]   = Vo[r_over_R2]
     return V
 
+def fit_holland_AB(r, spdm, rho, Lat, pn, pc, Vmin, A, B, print_values):
+    '''Same as fit_holland(), but based on A and B rather than Rmax, Vmax.'''
+    popt, pcov = curve_fit(lambda r, pn, pc, Vmin, A, B: B_sensitivity_holland_profile(r, rho, Lat, pn, pc, Vmin, A, B), r, spdm, p0=[pn, pc, Vmin, A, B], bounds=((1000 * 100, 850 * 100, 0, 0, 0), (1100 * 100, 1000 * 100, 50, 10000, 3))) # Lat is fixed
+    pn, pc, Vmin, A, B = popt[0], popt[1], popt[2], popt[3], popt[4]
+    if print_values:
+        print(
+            'HOLLAND - Fit values',
+            '\n Lat      =', "{:.2f}".format(Lat),
+            '\n pn_fit   =', "{:.2f}".format(pn),
+            '\n pc_fit   =', "{:.2f}".format(pc),
+            '\n Vmin_fit =', "{:.2f}".format(Vmin),
+            '\n A_fit    =', "{:.2f}".format(A),
+            '\n B_fit    =', "{:.2f}".format(B)
+        )
+    return Lat, pn, pc, Vmin, A, B
+
 def fit_B_sensitivity_experiment(r, spdm, rho, Lat, R1, R2, V1, V2, pn, pc, Vmin, A, B, print_values):
     '''Note: V1 and V2 are useless but they are contained in INI so they are passed as arguments here.'''
     popt, pcov = curve_fit(lambda r, pn, pc, Vmin, A, B0, B1, B2: B_sensitivity_complete_profile(r, rho, Lat, R1, R2, pn, pc, Vmin, A, B0, B1, B2), r, spdm, p0=[pn, pc, Vmin, A, B, B, B], bounds=((1000 * 100, 850 * 100, 0, 0, 0, 0, 0), (1100 * 100, 1000 * 100, 50, 10000, 3, 3, 3))) # Lat, rho, R1, R2 are fixed
@@ -954,10 +970,9 @@ def plot_twoB_sensitivity_experiment(i, file, r, spdm, INI, FIT):
     # Compute fitted profile and fitted parameters
     rho, Lat, _, _, _, _, _, _, _,   = INI['B_sens'] # rho, Lat, R1, V1, pn, pc, Vmin, A, B
     V_fit                            = twoB_sensitivity_complete_profile(r, rho, Lat, *FIT['B_sens'])
-    V_holland                        = holland_profile(r, *FIT['Holland'])
+    V_holland                        = B_sensitivity_holland_profile(r, rho, *FIT['Holland'])
     Rmax                             = np.argmax(spdm[:200]) # to center on Rmax
-    _, pn, pc, _, Rmax_fit, Vmax_fit = FIT['Holland'] # Lat, pn, pc, Vmin, Rmax, Vmax
-    _, _, _, A_fit, B_fit            = initialize_A_and_B(rho, Lat, pn, pc, Rmax_fit, Vmax_fit)
+    _, pn, pc, _, A_fit, B_fit       = FIT['Holland'] # Lat, pn, pc, Vmin, Rmax, Vmax
     _, _, _, _, A_sen, B0_sen, B1_sen= FIT['B_sens']  # R1, pn, pc, Vmin, A, B0, B1
     
     # Compute RMSEs
@@ -993,6 +1008,69 @@ def plot_twoB_sensitivity_experiment(i, file, r, spdm, INI, FIT):
     plt.ylabel('Wind speed (m/s)')
     plt.legend();plt.grid()
     return True
+
+def fit_twoB_test_sensitivity_experiment(r, spdm, rho, Lat, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit, print_values):
+    # Lat, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit = FIT['Holland']
+    '''Given values of pn, pc, Vmin, A and B that were fitting using the regular Holland profile, fits a 2 pieces Holland profile.
+    B is fixed at B_fit in the inner core (r < R1) but allowed to vary in the outer core (r > R1).
+    The merge radius (R1) is allowed to vary or fixed? (TO DETERMINE)'''
+
+    R1 = np.argmax(spdm[:200]) # R1 is initialized at Rmax
+    
+    popt, pcov = curve_fit(lambda r, R1, B1: twoB_sensitivity_complete_profile(r, rho, Lat, R1, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit, B1), r, spdm, p0=[R1, 1.5], bounds=((0, 0), (500, 3)))
+    R1, B1 = popt[0], popt[1]
+    if print_values:
+        print(
+            'B SENSITIVITY - Fit values',
+            '\n R1_fit   =', "{:.2f}".format(R1),
+            '\n B1_fit   =', "{:.2f}".format(B1)
+        )
+    return R1, B1  
+
+def plot_twoB_test_sensitivity_experiment(i, file, r, spdm, INI, FIT):
+    # Compute fitted profile and fitted parameters
+    rho = 1.15
+    Lat, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit = FIT['Holland']
+    R1_fit, B1_fit                              = FIT['B_sens']
+    V_fit                                       = twoB_sensitivity_complete_profile(r, rho, Lat, R1_fit, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit, B1_fit)
+    V_holland                                   = B_sensitivity_holland_profile(r, rho, *FIT['Holland'])
+    Rmax                                        = np.argmax(spdm[:200]) # to center on Rmax
+    
+    # Compute RMSEs
+    holland_rmse = rmse(V_holland, spdm)
+    B_sens_rmse  = rmse(V_fit,     spdm)
+    
+    # Title
+    plt.figure(figsize=(18, 8))
+    plt.suptitle('N°' + '%d'%i + ": " + os.path.basename(file), fontsize=14)
+    
+    # Large scale
+    plt.subplot(1, 2, 1)
+    fig1 = plt.plot(r, spdm, color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+    fig2 = plt.plot(r, V_holland, color='steelblue', label='Holland profile; A_fit = ' + "{:.0f}".format(A_fit) + '; B_fit = ' + "{:.2f}".format(B_fit) + ';     => RMSE = ' + "{:.2f}".format(holland_rmse)) # V_holland
+    fig3 = plt.plot(r, V_fit, color='fuchsia',       label='Piecewise Holland; R1_fit = ' + "{:.0f}".format(R1_fit) + '; B1_fit = ' + "{:.2f}".format(B1_fit) + '; => RMSE = ' + "{:.2f}".format(B_sens_rmse)) # V_fit  
+    
+    plt.xlabel('Radius (km)')
+    plt.ylabel('Wind speed (m/s)')
+    plt.legend();plt.grid()
+
+    # Small scale
+    plt.subplot(1, 2, 2)
+    if Rmax >= 25:
+        fig4 = plt.plot(r[Rmax - 25 : Rmax + 25], spdm[Rmax - 25 : Rmax + 25],  color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+        fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label='Holland profile')        # V_holland
+        fig6 = plt.plot(r[Rmax - 25 : Rmax + 25], V_fit[Rmax - 25 : Rmax + 25], color='fuchsia',        label='V_fit')                  # V_fit
+    else:
+        fig4 = plt.plot(r[:50], spdm[:50],  color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+        fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label='Holland profile')        # V_holland
+        fig6 = plt.plot(r[:50], V_fit[:50], color='fuchsia',        label='V_fit')                  # V_fit
+
+    plt.xlabel('Radius (km)')
+    plt.ylabel('Wind speed (m/s)')
+    plt.legend();plt.grid()
+    return True
+
+
 
 
 #=====================DEBUG======================+-
