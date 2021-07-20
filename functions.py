@@ -937,23 +937,42 @@ def initialize_twoB_sensitivity_experiment(spdm, power_law, rho, Lat, pn, pc, pr
         )
     return rho, Lat, R1, V1, pn, pc, Vmin, A, B
 
-def twoB_sensitivity_complete_profile(r, rho, Lat, R1, pn, pc, Vmin, A, B0, B1):
-    '''Given some arguments, returns the complete profile, composed of 2 Holland profiles '''
+'''
+def twoB_sensitivity_complete_profile(r, rho, Lat, R1, pn, pc, Vmin, A, B0, B1, PARAMS):
+    # OUTER-CORE FIXED
     V              = r * 0. # initialize
     Vi             = B_sensitivity_holland_profile(r, rho, Lat, pn, pc, Vmin, A, B0)
     Vo             = B_sensitivity_holland_profile(r, rho, Lat, pn, pc, Vmin, A, B1)
     r_under_R1     = (r <  R1)
     r_over_R1      = (r >= R1)
-    V[r_under_R1]  = Vi[r_under_R1]
+    c_continuity   = np.empty(Vo[r_under_R1].shape[0])
+    if PARAMS['continuity']:
+        c_continuity.fill((Vi[int(R1)] - Vo[int(R1)]))
+    V[r_under_R1]  = Vi[r_under_R1] - c_continuity
     V[r_over_R1]   = Vo[r_over_R1]
     return V
+'''
 
-def fit_twoB_sensitivity_experiment(r, spdm, rho, Lat, R1, V1, pn, pc, Vmin, A, B, print_values):
+def twoB_sensitivity_complete_profile(r, rho, Lat, R1, pn, pc, Vmin, A, B0, B1, PARAMS):
+    # INER-CORE FIXED
+    V              = r * 0. # initialize
+    Vi             = B_sensitivity_holland_profile(r, rho, Lat, pn, pc, Vmin, A, B0)
+    Vo             = B_sensitivity_holland_profile(r, rho, Lat, pn, pc, Vmin, A, B1)
+    r_under_R1     = (r <  R1)
+    r_over_R1      = (r >= R1)
+    c_continuity   = np.empty(Vo[r_over_R1].shape[0])
+    if PARAMS['continuity']:
+        c_continuity.fill((Vi[int(R1)] - Vo[int(R1)]))
+    V[r_under_R1]  = Vi[r_under_R1] 
+    V[r_over_R1]   = Vo[r_over_R1] + c_continuity
+    return V
+
+def fit_twoB_sensitivity_experiment(r, spdm, rho, Lat, R1, V1, pn, pc, Vmin, A, B, PARAMS):
     '''Note: V1 and V2 are useless but they are contained in INI so they are passed as arguments here.'''
     # print(R1, pn, pc, Vmin, A, B, B) # print if x0 is infeasible
-    popt, pcov = curve_fit(lambda r, R1, pn, pc, Vmin, A, B0, B1: twoB_sensitivity_complete_profile(r, rho, Lat, R1, pn, pc, Vmin, A, B0, B1), r, spdm, p0=[R1, pn, pc, Vmin, 50, 1.5, 1.5], bounds=((0, 1000 * 100, 850 * 100, 0, 0, 0, 0), (500, 1100 * 100, 1000 * 100, 50, 10000, 3, 3))) # Lat, rho, R1, R2 are fixed
+    popt, pcov = curve_fit(lambda r, R1, pn, pc, Vmin, A, B0, B1: twoB_sensitivity_complete_profile(r, rho, Lat, R1, pn, pc, Vmin, A, B0, B1, PARAMS), r, spdm, p0=[R1, pn, pc, Vmin, 50, 1.5, 1.5], bounds=((0, 1000 * 100, 850 * 100, 0, 0, 0, 0), (500, 1100 * 100, 1000 * 100, 50, 10000, 3, 3))) # Lat, rho, R1, R2 are fixed
     R1, pn, pc, Vmin, A, B0, B1 = popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6]
-    if print_values:
+    if PARAMS['print_values']:
         print(
             'B SENSITIVITY - Fit values',
             '\n pn_fit   =', "{:.2f}".format(R1),
@@ -1009,7 +1028,7 @@ def plot_twoB_sensitivity_experiment(i, file, r, spdm, INI, FIT):
     plt.legend();plt.grid()
     return True
 
-def fit_twoB_test_sensitivity_experiment(r, spdm, rho, Lat, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit, print_values):
+def fit_twoB_test_sensitivity_experiment(r, spdm, rho, Lat, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit, PARAMS):
     # Lat, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit = FIT['Holland']
     '''Given values of pn, pc, Vmin, A and B that were fitting using the regular Holland profile, fits a 2 pieces Holland profile.
     B is fixed at B_fit in the inner core (r < R1) but allowed to vary in the outer core (r > R1).
@@ -1017,9 +1036,9 @@ def fit_twoB_test_sensitivity_experiment(r, spdm, rho, Lat, pn_fit, pc_fit, Vmin
 
     R1 = np.argmax(spdm[:200]) # R1 is initialized at Rmax
     
-    popt, pcov = curve_fit(lambda r, R1, B1: twoB_sensitivity_complete_profile(r, rho, Lat, R1, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit, B1), r, spdm, p0=[R1, 1.5], bounds=((0, 0), (500, 3)))
+    popt, pcov = curve_fit(lambda r, R1, B1: twoB_sensitivity_complete_profile(r, rho, Lat, R1, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit, B1, PARAMS), r, spdm, p0=[R1, B_fit], bounds=((0, 0), (500, 3)))
     R1, B1 = popt[0], popt[1]
-    if print_values:
+    if PARAMS['print_values']:
         print(
             'B SENSITIVITY - Fit values',
             '\n R1_fit   =', "{:.2f}".format(R1),
@@ -1027,12 +1046,12 @@ def fit_twoB_test_sensitivity_experiment(r, spdm, rho, Lat, pn_fit, pc_fit, Vmin
         )
     return R1, B1  
 
-def plot_twoB_test_sensitivity_experiment(i, file, r, spdm, INI, FIT):
+def plot_twoB_test_sensitivity_experiment(i, file, r, spdm, INI, FIT, PARAMS):
     # Compute fitted profile and fitted parameters
     rho = 1.15
     Lat, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit = FIT['Holland']
     R1_fit, B1_fit                              = FIT['B_sens']
-    V_fit                                       = twoB_sensitivity_complete_profile(r, rho, Lat, R1_fit, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit, B1_fit)
+    V_fit                                       = twoB_sensitivity_complete_profile(r, rho, Lat, R1_fit, pn_fit, pc_fit, Vmin_fit, A_fit, B_fit, B1_fit, PARAMS)
     V_holland                                   = B_sensitivity_holland_profile(r, rho, *FIT['Holland'])
     Rmax                                        = np.argmax(spdm[:200]) # to center on Rmax
     
