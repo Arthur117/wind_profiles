@@ -357,15 +357,10 @@ def E04_outerwind_r0input_nondim_MM0(r0, fcor, Cdvary, C_d, w_cool, Nr):
 def initialize_chavas(spdm, Lat, PARAMS):
     '''Initialize the values of Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye for the Chavas profile.'''
     ### STORM PARAMETERS (Vmax, Vfit, Rfit, and Lat)
-    Vmax = np.max(spdm[:PARAMS['rmax_window']])                      #[ms-1] {50} maximum azimuthal-mean wind speed
-    print(spdm[200:250])
-    print(Vmax)
-    Vfit = 17                                      #[ms-1] {12} wind speed at Rfit
-    Rmax = np.argmax(spdm[:PARAMS['rmax_window']])                   #To compute Rfit
-    diff = np.abs(spdm - Vfit)                     #To compute Rfit
-    Rfit = (np.argmin(diff[Rmax:]) + Rmax) * 1000  #[m] {300*1000} a wind radius
-    # Vfit = spdm[Rfit]
-    Lat  = Lat                                     #[°]         latitude of storm center
+    Vmax       = np.max(spdm[:PARAMS['rmax_window']])    #[ms-1] {50} maximum azimuthal-mean wind speed
+    Rmax       = np.argmax(spdm[:PARAMS['rmax_window']]) #To compute Rfit
+    Rfit, Vfit = find_Vfit(spdm, PARAMS['chavas_vfit'], Rmax)
+    Lat        = Lat                                     #[°]         latitude of storm center
 
     ### DEFAULT PARAMETERS
     fcor = coriolis(Lat)         #[s-1]  {5e-5} Coriolis parameter at storm center
@@ -397,6 +392,16 @@ def initialize_chavas(spdm, Lat, PARAMS):
             '\n alpha_eye =', "{:.2f}".format(alpha_eye)
         )
     return Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye
+
+def find_Vfit(spdm, Vfit, Rmax):
+    "Rmax is used to determine the relevant Vfit to use. If we don't have Rmax, then we have to choose Vfit manually."
+    Rmax       = np.int(Rmax)
+    Vmin_outer = np.min(spdm[Rmax:])
+    if Vfit > spdm[Rmax] or Vfit < Vmin_outer: # If Vfit is not in the observations then take the Vfit = (min + max) / 2
+        Vfit = (spdm[Rmax] + Vmin_outer) / 2
+    diff = np.abs(spdm - Vfit)
+    Rfit = (np.argmin(diff[Rmax:]) + Rmax) * 1000
+    return Rfit, Vfit 
 
 def fit_chavas(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye, PARAMS):
     '''Returns the VV and rr associated to Chavas (different than other profiles), as well as optimal Rmax, r0, Rmerge and Vmerge.
@@ -688,11 +693,14 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     i        = '{0:03}'.format(i) # convert 1 to '001'
     filename = os.path.basename(os.path.splitext(file)[0])
     filename = 'wProfiles' + i + '_' + filename
-    savepath = "/home/arthur/results/windProfiles/v1/" + filename
+    savepath = PARAMS['save_dir'] + filename
     
     # Title
     plt.figure(figsize=(25, 19))
     plt.suptitle('N°' + i + ": " + os.path.basename(file), fontsize=14)
+    label_SAR = 'SAR total wind sped'
+    if PARAMS['tangential_wind_speed']:
+        label_SAR = 'SAR tangential wind speed'
     
     # Print TC and spd
     plt.subplot(2, 2, 1)
@@ -718,6 +726,8 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     
     Rmax          = np.argmax(spdm[:PARAMS['rmax_window']]) # center on Rmax
     # Compute indexes to print in the right window (for Chavas profile only)
+    lower_bound   = np.argmax(r_chavas >= r[0] - 0.5) # find the index i so that r_chavas[i] = r[0]
+    r_chavas      = r_chavas[lower_bound:]
     upper_bound   = np.int(np.floor(len(r_chavas) * len(spdm) / (FIT['Chavas'][3] / 1000.))) # to not plot the entire Chavas profile (because it goes until r0 which is larger than 500 km in the general case)
     index25       = np.int(np.floor(len(r_chavas) * 25 / (FIT['Chavas'][3] / 1000.)))
     upper_bound50 = np.int(np.floor(len(r_chavas) * 50 / (FIT['Chavas'][3] / 1000.)))
@@ -725,7 +735,7 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     
     # Large scale
     plt.subplot(2, 2, 3)
-    fig1 = plt.plot(r, spdm, color='k', linewidth=3,            label='SAR-derived wind speed')    # V_obs
+    fig1 = plt.plot(r, spdm, color='k', linewidth=3,            label=label_SAR)                   # V_obs
     fig2 = plt.plot(r, V_rankine, color='darkorange',           label='Rankine profile')           # V_rankine
     fig3 = plt.plot(r, V_holland, color='steelblue',            label='Holland profile')           # V_holland
     fig4 = plt.plot(r, V_willoughby_no_smooth, color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smooth
@@ -738,13 +748,13 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     # Small scale
     plt.subplot(2, 2, 4)
     if Rmax >= 25:
-        fig6 = plt.plot(r[Rmax - 25 : Rmax + 25], spdm[Rmax - 25 : Rmax + 25], color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+        fig6 = plt.plot(r[Rmax - 25 : Rmax + 25], spdm[Rmax - 25 : Rmax + 25], color='k', linewidth=3, label=label_SAR)                # V_obs
         fig7 = plt.plot(r[Rmax - 25 : Rmax + 25], V_rankine[Rmax - 25 : Rmax + 25], color='darkorange', label='Rankine profile')       # V_rankine
         fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label='Holland profile')       # V_holland
         fig9 = plt.plot(r[Rmax - 25 : Rmax + 25], V_willoughby_no_smooth[Rmax - 25 : Rmax + 25], color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smooth
         fig10= plt.plot(r_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], V_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], color='forestgreen',   label='Chavas profile') # V_chavas
     else:
-        fig6 = plt.plot(r[:50], spdm[:50], color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+        fig6 = plt.plot(r[:50], spdm[:50], color='k', linewidth=3, label=label_SAR)                # V_obs
         fig7 = plt.plot(r[:50], V_rankine[:50], color='darkorange', label='Rankine profile')       # V_rankine
         fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label='Holland profile')       # V_holland
         fig9 = plt.plot(r[:50], V_willoughby_no_smooth[:50], color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smoothing
