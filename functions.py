@@ -354,14 +354,17 @@ def E04_outerwind_r0input_nondim_MM0(r0, fcor, Cdvary, C_d, w_cool, Nr):
 
     return rrfracr0,MMfracM0
 
-def initialize_chavas(spdm, Lat, print_values):
+def initialize_chavas(spdm, Lat, PARAMS):
     '''Initialize the values of Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye for the Chavas profile.'''
     ### STORM PARAMETERS (Vmax, Vfit, Rfit, and Lat)
-    Vmax = np.max(spdm[:200])                      #[ms-1] {50} maximum azimuthal-mean wind speed
+    Vmax = np.max(spdm[:PARAMS['rmax_window']])                      #[ms-1] {50} maximum azimuthal-mean wind speed
+    print(spdm[200:250])
+    print(Vmax)
     Vfit = 17                                      #[ms-1] {12} wind speed at Rfit
-    Rmax = np.argmax(spdm[:200])                   #To compute Rfit
+    Rmax = np.argmax(spdm[:PARAMS['rmax_window']])                   #To compute Rfit
     diff = np.abs(spdm - Vfit)                     #To compute Rfit
     Rfit = (np.argmin(diff[Rmax:]) + Rmax) * 1000  #[m] {300*1000} a wind radius
+    # Vfit = spdm[Rfit]
     Lat  = Lat                                     #[°]         latitude of storm center
 
     ### DEFAULT PARAMETERS
@@ -378,7 +381,7 @@ def initialize_chavas(spdm, Lat, print_values):
     # Eye adjustment
     eye_adj   = 0                  #[-]    {1} 0 = use ER11 profile in eye 1 = empirical adjustment
     alpha_eye = .15                #[-]    {.15 empirical Chavas et al 2015} V/Vm in eye is reduced by factor (r/rm)^alpha_eye ignored if eye_adj=0
-    if print_values:
+    if PARAMS['print_values']:
         print(
             'CHAVAS - Initial values',
             '\n Vmax_ini  =', "{:.2f}".format(Vmax),
@@ -395,10 +398,11 @@ def initialize_chavas(spdm, Lat, print_values):
         )
     return Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye
 
-def fit_chavas(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye, print_values):
-    '''Returns the VV and rr associated to Chavas (different than other profiles), as well as optimal Rmax, r0, Rmerge and Vmerge.'''
+def fit_chavas(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye, PARAMS):
+    '''Returns the VV and rr associated to Chavas (different than other profiles), as well as optimal Rmax, r0, Rmerge and Vmerge.
+    r is useful only to define the first valid index of Chavas.'''
     rr, VV, rmax, r0, rmerge, Vmerge = ER11E04_nondim_rfitinput(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye)
-    if print_values:
+    if PARAMS['print_values']:
         print(
             'CHAVAS - Fit values',
             '\n Rmax_fit   =', "{:.2f}".format(Rmax),
@@ -406,7 +410,7 @@ def fit_chavas(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_a
             '\n Rmerge_fit =', "{:.2f}".format(rmerge),
             '\n Vmerge_fit =', "{:.2f}".format(Vmerge)
 
-        )
+        ) 
     return rr, VV, rmax, r0, rmerge, Vmerge
 
 # Rankine
@@ -420,13 +424,13 @@ def rankine_profile(r, x, alpha, Vmin, Rmax):
     V[r > Rmax] = Vou[r > Rmax]
     return V
 
-def initialize_rankine(spdm, x, alpha, print_values):
+def initialize_rankine(spdm, x, alpha, PARAMS):
     '''Initialize the values of x, alpha, Vmin and Rmax for the Rankine profile.'''
     Vmin   = spdm[0] # 14
-    Rmax   = np.argmax(spdm[:200]) # 40
+    Rmax   = np.argmax(spdm[:PARAMS['rmax_window']]) # 40
     if Rmax < 5: # sometimes the TC is not well-centered and the center of the grid is on the eyewall. In this case we set Rmax = 5 because in the optimizing process we constrain Rmax > 5.
         Rmax = 5.01
-    if print_values:
+    if PARAMS['print_values']:
         print(
             'RANKINE - Initial values',
             '\n x_ini     =', "{:.2f}".format(x),
@@ -436,12 +440,12 @@ def initialize_rankine(spdm, x, alpha, print_values):
         )
     return x, alpha, Vmin, Rmax
 
-def fit_rankine(r, spdm, x, alpha, Vmin, Rmax, print_values):
+def fit_rankine(r, spdm, x, alpha, Vmin, Rmax, PARAMS):
     '''Fit the rankine profile given initial values of x, alpha, Vmin and Rmax.
     Returns the optimal parameters found with curve_fit()'''
     popt, pcov                           = curve_fit(rankine_profile, r, spdm, p0=[x, alpha, Vmin, Rmax], bounds=((0, 0, 0, 5), (1, 50, 50, 500)))
     x_fit, alpha_fit, Vmin_fit, Rmax_fit = popt[0], popt[1], popt[2], popt[3]
-    if print_values:
+    if PARAMS['print_values']:
         print(
             'RANKINE - Fit values',
             '\n x_fit     =', "{:.2f}".format(x_fit),
@@ -463,17 +467,17 @@ def holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax):
     V   = Vmin + np.sqrt(A * B * (pn - pc) * np.exp((-1) * A / (r ** B)) / (rho * r ** B) + (r ** 2 * fcor ** 2) / 4) - (r * fcor / 2)
     return V
 
-def initialize_holland(spdm, Lat, pn, pc, print_values):
+def initialize_holland(spdm, Lat, pn, pc, PARAMS):
     '''The user chooses the values for Lat, pn (in mbar) and pc (mbar).'''
     Lat    = Lat                   #[°] latitude of storm center
     pn     = pn * 100.             # to convert mbar pressures in Pa pressures
     pc     = pc * 100.             # to convert mbar pressures in Pa pressures
     Vmin   = spdm[0]               # 14
-    Rmax   = np.argmax(spdm[:200]) # 40
+    Rmax   = np.argmax(spdm[:PARAMS['rmax_window']]) # 40
     if Rmax < 5: # sometimes the TC is not well-centered and the center of the grid is on the eyewall. In this case we set Rmax = 5 because in the optimizing process we constrain Rmax > 5.
         Rmax = 5.01
-    Vmax   = np.max(spdm[:200])    # 48
-    if print_values:
+    Vmax   = np.max(spdm[:PARAMS['rmax_window']])    # 48
+    if PARAMS['print_values']:
         print(
             'HOLLAND - Initial values',
             '\n Lat       =', "{:.2f}".format(Lat),
@@ -485,12 +489,12 @@ def initialize_holland(spdm, Lat, pn, pc, print_values):
         )
     return Lat, pn, pc, Vmin, Rmax, Vmax
 
-def fit_holland(r, spdm, Lat, pn, pc, Vmin, Rmax, Vmax, print_values):
+def fit_holland(r, spdm, Lat, pn, pc, Vmin, Rmax, Vmax, PARAMS):
     '''Fit the Holland profile given initial values of Lat, pn, pc, Vmin, Rmax and Vmax.
     Returns the optimal parameters found with curve_fit()'''
-    popt, pcov = curve_fit(lambda r, pn, pc, Vmin, Rmax, Vmax: holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax), r, spdm, p0=[pn, pc, Vmin, Rmax, Vmax], bounds=((1000 * 100, 850 * 100, 0, 5, 0), (1100 * 100, 1000 * 100, 50, 500, 200))) # Lat is fixed
+    popt, pcov = curve_fit(lambda r, pn, pc, Vmin, Rmax, Vmax: holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax), r, spdm, p0=[pn, pc, Vmin, Rmax, Vmax], bounds=((1000 * 100, 850 * 100, 0, 5, 0), (1100 * 100, 1000 * 100, 50, 500, PARAMS['rmax_window']))) # Lat is fixed
     pn, pc, Vmin, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3], popt[4]
-    if print_values:
+    if PARAMS['print_values']:
         print(
             'HOLLAND - Fit values',
             '\n Lat       =', "{:.2f}".format(Lat),
@@ -513,17 +517,17 @@ def willoughby_profile_no_smooth(r, n, X1, Vmin, Rmax, Vmax):
     V[r > Rmax] = Vsup[r > Rmax]
     return V
 
-def initialize_willoughby(spdm, n, print_values):
+def initialize_willoughby(spdm, n, PARAMS):
     '''Initialize the values of n, X1, Vmin, Rmax and Vmax for the Willoughby profile.
     By default X1 = 3 * Rmax'''
     n      = n
     Vmin   = spdm[0] # 14
-    Rmax   = np.argmax(spdm[:200]) # 40
+    Rmax   = np.argmax(spdm[:PARAMS['rmax_window']]) # 40
     X1     = 3 * Rmax
     if Rmax < 5: # sometimes the TC is not well-centered and the center of the grid is on the eyewall. In this case we set Rmax = 5 because in the optimizing process we constrain Rmax > 5.
         Rmax = 5.01
-    Vmax   = np.max(spdm[:200])    # 48
-    if print_values:
+    Vmax   = np.max(spdm[:PARAMS['rmax_window']])    # 48
+    if PARAMS['print_values']:
         print(
             'WILLOUGHBY - Initial values',
             '\n n_ini    =', "{:.2f}".format(n),
@@ -534,12 +538,12 @@ def initialize_willoughby(spdm, n, print_values):
         )
     return n, X1, Vmin, Rmax, Vmax
 
-def fit_willoughby_no_smooth(r, spdm, n, X1, Vmin, Rmax, Vmax, print_values):
+def fit_willoughby_no_smooth(r, spdm, n, X1, Vmin, Rmax, Vmax, PARAMS):
     '''Fit the Willoughby profile given initial values of n, X1, Vmin, Rmax, Vmax.
     Returns the optimal parameters found with curve_fit()'''
-    popt, pcov              = curve_fit(willoughby_profile_no_smooth, r, spdm, p0=[n, X1, Vmin, Rmax, Vmax], bounds=((0, 0, 0, 5, 0), (50, 5000, 50, 500, 200)))
+    popt, pcov              = curve_fit(willoughby_profile_no_smooth, r, spdm, p0=[n, X1, Vmin, Rmax, Vmax], bounds=((0, 0, 0, 5, 0), (50, 5000, 50, 500, PARAMS['rmax_window'])))
     n, X1, Vmin, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3], popt[4]
-    if print_values:
+    if PARAMS['print_values']:
         print(
             'WILLOUGHBY - Fit values',
             '\n n_fit    =', "{:.2f}".format(n),
@@ -606,26 +610,35 @@ def compute_mean_tangential_wind_spd(ds, r_window_len):
 def initialize_radius(spdm):
     '''Given the spdm, returns the largest radius (and asociated spdm) on which the profile can be fitted. 
     Indeed, sometimes the spdm isn't defined from r = 0 to r = 500, in this case the largest domain is taken instead.'''
-    if np.isnan(np.min(spdm)):
+    first_valid_index = 0
+    last_valid_index  = len(spdm)
+    r                 = np.arange(last_valid_index) + .0001 # to avoid having both r = 0 and n < 0 during fitting process
+    # Lower bound
+    # We change it if spdm[0] = nan
+    if np.isnan(spdm[0]):
+        first_valid_index = np.min(np.where(np.isfinite(spdm)))
+    # Upper bound
+    # We change it if there is a nan somewhere
+    if np.isnan(np.min(spdm[first_valid_index:])):
         # last_valid_index = (~np.isnan(spdm)).cumsum(0).argmax(0)
-        last_valid_index = np.min(np.where(np.isnan(spdm))[0])# returns the index of the last valid value before the first nan
-        r                = np.arange(last_valid_index) + .0001 # to avoid having both r = 0 and n < 0 during fitting process
-    else:
-        last_valid_index = 501
-        r                = np.arange(last_valid_index) + .0001 # to avoid having both r = 0 and n < 0 during fitting process
-    spdm = spdm[:last_valid_index]
-    return r, spdm
+        last_valid_index  = np.min(np.where(np.isnan(spdm[first_valid_index:]))[0])# returns the index of the last valid value before the first nan
+        last_valid_index += first_valid_index - 1
+    r    = r[first_valid_index:last_valid_index]
+    spdm = spdm[first_valid_index:last_valid_index]
+    return r, spdm, first_valid_index
 
-def plot_curves(i, file, r, spdm, FIT):
+def plot_curves(i, file, r, spdm, FIT, PARAMS):
     # Compute fitted profiles
     V_rankine              = rankine_profile(r, *FIT['Rankine'])
     V_holland              = holland_profile(r, *FIT['Holland'])
     V_willoughby_no_smooth = willoughby_profile_no_smooth(r, *FIT['Willoughby'])
     V_chavas               = FIT['Chavas'][1]         # Different from other profiles: here V_chavas has already been computed before, and is stored in FIT['Chavas'][1]
-    r_chavas               = FIT['Chavas'][0] / 1000. # Convert from m to km
+    r_chavas               = FIT['Chavas'][0] / 1000. # Convert from m to km 
     
-    Rmax          = np.argmax(spdm[:200]) # center on Rmax
+    Rmax          = np.argmax(spdm[:PARAMS['rmax_window']]) # center on Rmax
     # Compute indexes to print in the right window (for Chavas profile only)
+    lower_bound   = np.argmax(r_chavas >= r[0] - 0.5) # find the index i so that r_chavas[i] = r[0]
+    r_chavas      = r_chavas[lower_bound:]
     upper_bound   = np.int(np.floor(len(r_chavas) * len(spdm) / (FIT['Chavas'][3] / 1000.))) # to not plot the entire Chavas profile (because it goes until r0 which is larger than 500 km in the general case)
     index25       = np.int(np.floor(len(r_chavas) * 25 / (FIT['Chavas'][3] / 1000.)))
     upper_bound50 = np.int(np.floor(len(r_chavas) * 50 / (FIT['Chavas'][3] / 1000.)))
@@ -634,10 +647,13 @@ def plot_curves(i, file, r, spdm, FIT):
     # Title
     plt.figure(figsize=(18, 8))
     plt.suptitle('N°' + '%d'%i + ": " + os.path.basename(file), fontsize=14)
-    
+    label_SAR = 'SAR total wind sped'
+    if PARAMS['tangential_wind_speed']:
+        label_SAR = 'SAR tangential wind speed'
+        
     # Large scale
     plt.subplot(1, 2, 1)
-    fig1 = plt.plot(r, spdm, color='k', linewidth=3,            label='SAR-derived wind speed')    # V_obs
+    fig1 = plt.plot(r, spdm, color='k', linewidth=3,            label=label_SAR)                   # V_obs
     fig2 = plt.plot(r, V_rankine, color='darkorange',           label='Rankine profile')           # V_rankine
     fig3 = plt.plot(r, V_holland, color='steelblue',            label='Holland profile')           # V_holland
     fig4 = plt.plot(r, V_willoughby_no_smooth, color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smooth
@@ -650,13 +666,13 @@ def plot_curves(i, file, r, spdm, FIT):
     # Small scale
     plt.subplot(1, 2, 2)
     if Rmax >= 25:
-        fig6 = plt.plot(r[Rmax - 25 : Rmax + 25], spdm[Rmax - 25 : Rmax + 25], color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+        fig6 = plt.plot(r[Rmax - 25 : Rmax + 25], spdm[Rmax - 25 : Rmax + 25], color='k', linewidth=3, label=label_SAR)                # V_obs
         fig7 = plt.plot(r[Rmax - 25 : Rmax + 25], V_rankine[Rmax - 25 : Rmax + 25], color='darkorange', label='Rankine profile')       # V_rankine
         fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label='Holland profile')       # V_holland
         fig9 = plt.plot(r[Rmax - 25 : Rmax + 25], V_willoughby_no_smooth[Rmax - 25 : Rmax + 25], color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smooth
         fig10= plt.plot(r_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], V_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], color='forestgreen',   label='Chavas profile') # V_chavas
     else:
-        fig6 = plt.plot(r[:50], spdm[:50], color='k', linewidth=3, label='SAR-derived wind speed') # V_obs
+        fig6 = plt.plot(r[:50], spdm[:50], color='k', linewidth=3, label=label_SAR)                # V_obs
         fig7 = plt.plot(r[:50], V_rankine[:50], color='darkorange', label='Rankine profile')       # V_rankine
         fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label='Holland profile')       # V_holland
         fig9 = plt.plot(r[:50], V_willoughby_no_smooth[:50], color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smoothing
@@ -667,7 +683,7 @@ def plot_curves(i, file, r, spdm, FIT):
     plt.legend();plt.grid()
     return True
 
-def save_curves(i, file, ds, r, spdm, INI, FIT):
+def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     # Save path and name
     i        = '{0:03}'.format(i) # convert 1 to '001'
     filename = os.path.basename(os.path.splitext(file)[0])
@@ -700,7 +716,7 @@ def save_curves(i, file, ds, r, spdm, INI, FIT):
     V_chavas               = FIT['Chavas'][1]         # Different from other profiles: here V_chavas has already been computed before, and is stored in FIT['Chavas'][1]
     r_chavas               = FIT['Chavas'][0] / 1000. # Convert from m to km
     
-    Rmax          = np.argmax(spdm[:200]) # center on Rmax
+    Rmax          = np.argmax(spdm[:PARAMS['rmax_window']]) # center on Rmax
     # Compute indexes to print in the right window (for Chavas profile only)
     upper_bound   = np.int(np.floor(len(r_chavas) * len(spdm) / (FIT['Chavas'][3] / 1000.))) # to not plot the entire Chavas profile (because it goes until r0 which is larger than 500 km in the general case)
     index25       = np.int(np.floor(len(r_chavas) * 25 / (FIT['Chavas'][3] / 1000.)))
