@@ -878,7 +878,7 @@ def calculate_diff_by_cat(cat, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):
         diff_willou  = np.concatenate((diff_willou,  [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
         diff_chavas  = np.concatenate((diff_chavas,  [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
         nbcat_rank_hol_will = np.concatenate((nbcat_rank_hol_will, [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)    
-    if cat == 'storm':
+    if cat == 'storm' or cat == 'dep':
         i = 0
     else: # then it's 'cat-0', 1, ..., or 5
         i = int(str(cat)[-1])
@@ -892,11 +892,13 @@ def calculate_diff_by_cat(cat, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):
     
     return DIFF, NB_CAT
 
-def plot_comp_by_cat(DIFF, NB_CAT, PARAMS):
-    r   = np.arange(501)
+def plot_comp_by_cat(DIFF, NB_CAT, PARAMS, save):
+    r = np.arange(501)
+    filename = get_filename('all_profiles_comparison_by_category', PARAMS)
     
     # Define figure attributes
     plt.figure(figsize=(25, 35))
+    plt.suptitle("Mean difference between SAR wind speed and common parametric profiles", fontsize=18)
     COLORS = {
         'Rankine':    'darkorange',
         'Holland':    'steelblue',
@@ -923,10 +925,22 @@ def plot_comp_by_cat(DIFF, NB_CAT, PARAMS):
             plt.plot(r, mean_diff, color=COLORS[profile], label=profile)
         plt.xlabel('Radius (km)')
         plt.ylabel('Wind speed (m/s)')
-        plt.legend();plt.grid()   
+        plt.legend();plt.grid()
+    
+    # Save figure
+    if save:
+        plt.savefig(PARAMS['save_dir'] + filename)
+        
     return None
 
-        
+def get_filename(filename, PARAMS):
+    if PARAMS['tangential_wind_speed']:
+        filename += '_tangential_ws'
+    if PARAMS['use_curve_fit']:
+        filename += '_curve_fit'
+    if PARAMS['chavas_vmin']:
+        filename += '_chavas_VminTranslated'
+    return filename
         
 #================================= B SENSITIVITY FUNCTIONS =====================================
 
