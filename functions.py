@@ -831,7 +831,14 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     
     return True
 
-def calculate_diff_by_cat(cat, r, spdm, INI, FIT, DIFF, PARAMS):    
+
+#================================= COMPARISON BY CATEGORIES =====================================
+
+
+def calculate_diff_by_cat(cat, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):
+    cat = np.array(cat)
+    
+    # Compute fitted profiles
     V_rankine              = rankine_profile(r, *FIT['Rankine'])
     V_holland              = holland_profile(r, *FIT['Holland'])
     V_willoughby_no_smooth = willoughby_profile_no_smooth(r, *FIT['Willoughby'])
@@ -842,49 +849,82 @@ def calculate_diff_by_cat(cat, r, spdm, INI, FIT, DIFF, PARAMS):
     lower_bound   = np.argmax(r_chavas >= r[0] - 0.5) # find the index i so that r_chavas[i] = r[0], i.e to translate Cavas if r[0] = 5km for instance
     r_chavas      = r_chavas[lower_bound:]
     V_chavas      = V_chavas[lower_bound:]
-    ind_chavas500 = [np.argwhere(r_chavas >= i)[0] for i in range(0, len(r))] # compute the indices of r = 0, 1, 2, ... ==> e.g convert [0.8, 0.9, 0.9, 1.1, 1.2, 1.5, 1.7, 1.9, 2.1, 2.3] to [0, 3, 8]
+    ind_chavas500 = [np.argwhere(r_chavas >= i)[0] for i in range(0, min(len(r), int(r_chavas[-1])))] # compute the indices of r = 0, 1, 2, ... ==> e.g convert [0.8, 0.9, 0.9, 1.1, 1.2, 1.5, 1.7, 1.9, 2.1, 2.3] to [0, 3, 8]
     ind_chavas500 = [int(i) for i in ind_chavas500]
     V_chavas500   = [V_chavas[i] for i in ind_chavas500]
     
+    # Initialize NB_CAT for each profile
+    nbcat_rank_hol_will = [1] * len(spdm)
+    nbcat_chavas        = [1] * len(V_chavas500)
+    nbcat_chavas        = np.concatenate((nbcat_chavas, [0] * (PARAMS['r_window_len'] - len(V_chavas500))), axis=0)
+    if len(V_chavas500) < len(spdm):
+        V_chavas500 = np.concatenate((V_chavas500, spdm[len(V_chavas500):]), axis=0)
+    
+    # TODO 
+    '''
     # Compute r* = r/Rmax
     Rmax   = np.argmax(spdm[:PARAMS['rmax_window']])
     r_star = r / Rmax
-    
-    # Define labels
-    label_SAR    = 'SAR total wind sped'
-    label_Rankine= 'Rankine profile'
-    label_Holland= 'Holland profile'
-    label_Willou = 'Willoughby -no smoothing'
-    label_Chavas = 'Chavas profile'
-    if PARAMS['tangential_wind_speed']:
-        label_SAR = 'SAR tangential wind speed'
-    if PARAMS['use_curve_fit']==False:
-        x, _, Vmin, Rmax        = INI['Rankine']
-        Lat, pn, pc, _, _, Vmax = INI["Holland"]
-        alpha = (Vmax - Vmin) / Rmax
-        n, X1, _, _, _          = INI['Willoughby']
-        V_rankine = rankine_profile(r, x, alpha, Vmin, Rmax)
-        V_holland = holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax)
-        V_willoughby_no_smooth = willoughby_profile_no_smooth(r, n, X1, Vmin, Rmax, Vmax)
-        label_Rankine= 'Rankine - no fit'
-        label_Holland= 'Holland - no fit'
-        label_Willou = 'Willoughby - no fit'
-    if PARAMS['chavas_vmin']:
-        # translate the profile from Vmin
-        V_chavas    += INI['Chavas'][1]
-        label_Chavas = 'Chavas Vmin - translated'
+    '''
         
     # Compute difference between obs and profile
     diff_rankine = np.subtract(spdm, V_rankine)
     diff_holland = np.subtract(spdm, V_holland)
-    diff_willou  = np.subtract(spdm, V_willou)
-    diff_chavas  = np.subtract(spdm, V_chavas)
-        
+    diff_willou  = np.subtract(spdm, V_willoughby_no_smooth)
+    diff_chavas  = np.subtract(spdm, V_chavas500)
+    if PARAMS['r_window_len'] - len(spdm) > 0:
+        diff_rankine = np.concatenate((diff_rankine, [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
+        diff_holland = np.concatenate((diff_holland, [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
+        diff_willou  = np.concatenate((diff_willou,  [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
+        diff_chavas  = np.concatenate((diff_chavas,  [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
+        nbcat_rank_hol_will = np.concatenate((nbcat_rank_hol_will, [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)    
     if cat == 'storm':
-        print('ok')
+        i = 0
+    else: # then it's 'cat-0', 1, ..., or 5
+        i = int(str(cat)[-1])
+    
+    DIFF[i]['Rankine']   += diff_rankine
+    DIFF[i]['Holland']   += diff_holland
+    DIFF[i]['Willoughby']+= diff_willou
+    DIFF[i]['Chavas']    += diff_chavas
+    NB_CAT[i]['Rank-Hol-Will'] = np.add(NB_CAT[i]['Rank-Hol-Will'], nbcat_rank_hol_will)
+    NB_CAT[i]['Chavas']        = np.add(NB_CAT[i]['Chavas'], nbcat_chavas)
+    
+    return DIFF, NB_CAT
 
-        
-    return DIFF
+def plot_comp_by_cat(DIFF, NB_CAT, PARAMS):
+    r   = np.arange(501)
+    
+    # Define figure attributes
+    plt.figure(figsize=(25, 35))
+    COLORS = {
+        'Rankine':    'darkorange',
+        'Holland':    'steelblue',
+        'Willoughby': 'orchid',
+        'Chavas':     'forestgreen'
+    }
+    subtitles = ['Storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5']
+    
+    # Print TC number in each cat:
+    print("Number of TCs in each categories:")
+    print("Storm:  ", int(np.max(NB_CAT[0]['Chavas'])))
+    for i in range(1, 6):
+        print("Cat.", i, ":", int(np.max(NB_CAT[i]['Rank-Hol-Will'])))
+    
+    # Plot curves
+    for i in range(6):
+        plt.subplot(6, 1, i + 1)
+        plt.gca().set_title(subtitles[i])
+        for profile in DIFF[i].keys():
+            if profile == 'Chavas':
+                mean_diff = np.divide(DIFF[i][profile], NB_CAT[i][profile])
+            else:
+                mean_diff = np.divide(DIFF[i][profile], NB_CAT[i]['Rank-Hol-Will'])
+            plt.plot(r, mean_diff, color=COLORS[profile], label=profile)
+        plt.xlabel('Radius (km)')
+        plt.ylabel('Wind speed (m/s)')
+        plt.legend();plt.grid()   
+    return None
 
         
         
