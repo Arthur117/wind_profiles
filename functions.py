@@ -358,6 +358,7 @@ def initialize_chavas(spdm, Lat, PARAMS):
     '''Initialize the values of Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye for the Chavas profile.'''
     ### STORM PARAMETERS (Vmax, Vfit, Rfit, and Lat)
     Vmax       = np.max(spdm[:PARAMS['rmax_window']])    #[ms-1] {50} maximum azimuthal-mean wind speed
+    Vmin       = np.nanmin(spdm)                         # 14
     Rmax       = np.argmax(spdm[:PARAMS['rmax_window']]) #To compute Rfit
     Rfit, Vfit = find_Vfit(spdm, PARAMS['chavas_vfit'], Rmax)
     Lat        = Lat                                     #[°]         latitude of storm center
@@ -380,6 +381,7 @@ def initialize_chavas(spdm, Lat, PARAMS):
         print(
             'CHAVAS - Initial values',
             '\n Vmax_ini  =', "{:.2f}".format(Vmax),
+            '\n VMin_ini  =', "{:.2f}".format(Vmin),
             '\n Rfit_ini  =', "{:.2f}".format(Rfit),
             '\n Vfit_ini  =', "{:.2f}".format(Vfit),
             '\n fcor      =', "{:.2f}".format(fcor),
@@ -391,7 +393,7 @@ def initialize_chavas(spdm, Lat, PARAMS):
             '\n eye_adj   =', "{:.2f}".format(eye_adj),
             '\n alpha_eye =', "{:.2f}".format(alpha_eye)
         )
-    return Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye
+    return Vmax, Vmin, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye
 
 def find_Vfit(spdm, Vfit, Rmax):
     "Rmax is used to determine the relevant Vfit to use. If we don't have Rmax, then we have to choose Vfit manually."
@@ -403,9 +405,12 @@ def find_Vfit(spdm, Vfit, Rmax):
     Rfit = (np.argmin(diff[Rmax:]) + Rmax) * 1000
     return Rfit, Vfit 
 
-def fit_chavas(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye, PARAMS):
+def fit_chavas(Vmax, Vmin, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye, PARAMS):
     '''Returns the VV and rr associated to Chavas (different than other profiles), as well as optimal Rmax, r0, Rmerge and Vmerge.
     r is useful only to define the first valid index of Chavas.'''
+    if PARAMS['chavas_vmin']:
+        Vmax -= Vmin
+        Vfit -= Vmin
     rr, VV, rmax, r0, rmerge, Vmerge = ER11E04_nondim_rfitinput(Vmax, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd, eye_adj, alpha_eye)
     if PARAMS['print_values']:
         print(
@@ -632,13 +637,22 @@ def initialize_radius(spdm):
     spdm = spdm[first_valid_index:last_valid_index]
     return r, spdm, first_valid_index
 
-def plot_curves(i, file, r, spdm, FIT, PARAMS):
+def plot_curves(i, file, r, spdm, INI, FIT, PARAMS):
     # Compute fitted profiles
     V_rankine              = rankine_profile(r, *FIT['Rankine'])
     V_holland              = holland_profile(r, *FIT['Holland'])
     V_willoughby_no_smooth = willoughby_profile_no_smooth(r, *FIT['Willoughby'])
     V_chavas               = FIT['Chavas'][1]         # Different from other profiles: here V_chavas has already been computed before, and is stored in FIT['Chavas'][1]
     r_chavas               = FIT['Chavas'][0] / 1000. # Convert from m to km 
+    
+    label_SAR    = 'SAR total wind sped'
+    label_Chavas = 'Chavas profile'
+    if PARAMS['tangential_wind_speed']:
+        label_SAR = 'SAR tangential wind speed'
+    if PARAMS['chavas_vmin']:
+        # translate the profile from Vmin
+        V_chavas    += INI['Chavas'][1]
+        label_Chavas = 'Chavas Vmin - translated'
     
     Rmax          = np.argmax(spdm[:PARAMS['rmax_window']]) # center on Rmax
     # Compute indexes to print in the right window (for Chavas profile only)
@@ -652,9 +666,6 @@ def plot_curves(i, file, r, spdm, FIT, PARAMS):
     # Title
     plt.figure(figsize=(18, 8))
     plt.suptitle('N°' + '%d'%i + ": " + os.path.basename(file), fontsize=14)
-    label_SAR = 'SAR total wind sped'
-    if PARAMS['tangential_wind_speed']:
-        label_SAR = 'SAR tangential wind speed'
         
     # Large scale
     plt.subplot(1, 2, 1)
@@ -662,7 +673,7 @@ def plot_curves(i, file, r, spdm, FIT, PARAMS):
     fig2 = plt.plot(r, V_rankine, color='darkorange',           label='Rankine profile')           # V_rankine
     fig3 = plt.plot(r, V_holland, color='steelblue',            label='Holland profile')           # V_holland
     fig4 = plt.plot(r, V_willoughby_no_smooth, color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smooth
-    fig5 = plt.plot(r_chavas[:upper_bound], V_chavas[:upper_bound], color='forestgreen',   label='Chavas profile') # V_chavas    
+    fig5 = plt.plot(r_chavas[:upper_bound], V_chavas[:upper_bound], color='forestgreen',   label=label_Chavas) # V_chavas    
     
     plt.xlabel('Radius (km)')
     plt.ylabel('Wind speed (m/s)')
@@ -675,13 +686,13 @@ def plot_curves(i, file, r, spdm, FIT, PARAMS):
         fig7 = plt.plot(r[Rmax - 25 : Rmax + 25], V_rankine[Rmax - 25 : Rmax + 25], color='darkorange', label='Rankine profile')       # V_rankine
         fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label='Holland profile')       # V_holland
         fig9 = plt.plot(r[Rmax - 25 : Rmax + 25], V_willoughby_no_smooth[Rmax - 25 : Rmax + 25], color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smooth
-        fig10= plt.plot(r_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], V_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], color='forestgreen',   label='Chavas profile') # V_chavas
+        fig10= plt.plot(r_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], V_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], color='forestgreen',   label=label_Chavas) # V_chavas
     else:
         fig6 = plt.plot(r[:50], spdm[:50], color='k', linewidth=3, label=label_SAR)                # V_obs
         fig7 = plt.plot(r[:50], V_rankine[:50], color='darkorange', label='Rankine profile')       # V_rankine
         fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label='Holland profile')       # V_holland
         fig9 = plt.plot(r[:50], V_willoughby_no_smooth[:50], color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smoothing
-        fig10= plt.plot(r_chavas[:upper_bound50], V_chavas[:upper_bound50], color='forestgreen',   label='Chavas profile') # V_chavas
+        fig10= plt.plot(r_chavas[:upper_bound50], V_chavas[:upper_bound50], color='forestgreen',   label=label_Chavas) # V_chavas
 
     plt.xlabel('Radius (km)')
     plt.ylabel('Wind speed (m/s)')
@@ -698,9 +709,6 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     # Title
     plt.figure(figsize=(25, 19))
     plt.suptitle('N°' + i + ": " + os.path.basename(file), fontsize=14)
-    label_SAR = 'SAR total wind sped'
-    if PARAMS['tangential_wind_speed']:
-        label_SAR = 'SAR tangential wind speed'
     
     # Print TC and spd
     plt.subplot(2, 2, 1)
@@ -714,7 +722,6 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     ds_ws      = np.array(ds['wind_speed'])
     # Possible to call griddata() without using meshgrid() before? 
     spd        = griddata((ds_r.flatten(), ds_th.flatten()), ds_ws.flatten(), (radius, th), method='nearest')
-
     plt.pcolormesh(spd)
     
     # Compute fitted profiles
@@ -723,6 +730,15 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     V_willoughby_no_smooth = willoughby_profile_no_smooth(r, *FIT['Willoughby'])
     V_chavas               = FIT['Chavas'][1]         # Different from other profiles: here V_chavas has already been computed before, and is stored in FIT['Chavas'][1]
     r_chavas               = FIT['Chavas'][0] / 1000. # Convert from m to km
+    
+    label_SAR    = 'SAR total wind sped'
+    label_Chavas = 'Chavas profile'
+    if PARAMS['tangential_wind_speed']:
+        label_SAR = 'SAR tangential wind speed'
+    if PARAMS['chavas_vmin']:
+        # translate the profile from Vmin
+        V_chavas    += INI['Chavas'][1]
+        label_Chavas = 'Chavas Vmin - translated'
     
     Rmax          = np.argmax(spdm[:PARAMS['rmax_window']]) # center on Rmax
     # Compute indexes to print in the right window (for Chavas profile only)
@@ -739,7 +755,7 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     fig2 = plt.plot(r, V_rankine, color='darkorange',           label='Rankine profile')           # V_rankine
     fig3 = plt.plot(r, V_holland, color='steelblue',            label='Holland profile')           # V_holland
     fig4 = plt.plot(r, V_willoughby_no_smooth, color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smooth
-    fig5 = plt.plot(r_chavas[:upper_bound], V_chavas[:upper_bound], color='forestgreen',   label='Chavas profile') # V_chavas    
+    fig5 = plt.plot(r_chavas[:upper_bound], V_chavas[:upper_bound], color='forestgreen',   label=label_Chavas) # V_chavas    
     
     plt.xlabel('Radius (km)')
     plt.ylabel('Wind speed (m/s)')
@@ -752,13 +768,13 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
         fig7 = plt.plot(r[Rmax - 25 : Rmax + 25], V_rankine[Rmax - 25 : Rmax + 25], color='darkorange', label='Rankine profile')       # V_rankine
         fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label='Holland profile')       # V_holland
         fig9 = plt.plot(r[Rmax - 25 : Rmax + 25], V_willoughby_no_smooth[Rmax - 25 : Rmax + 25], color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smooth
-        fig10= plt.plot(r_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], V_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], color='forestgreen',   label='Chavas profile') # V_chavas
+        fig10= plt.plot(r_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], V_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], color='forestgreen',   label=label_Chavas) # V_chavas
     else:
         fig6 = plt.plot(r[:50], spdm[:50], color='k', linewidth=3, label=label_SAR)                # V_obs
         fig7 = plt.plot(r[:50], V_rankine[:50], color='darkorange', label='Rankine profile')       # V_rankine
         fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label='Holland profile')       # V_holland
         fig9 = plt.plot(r[:50], V_willoughby_no_smooth[:50], color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smoothing
-        fig10= plt.plot(r_chavas[:upper_bound50], V_chavas[:upper_bound50], color='forestgreen',   label='Chavas profile') # V_chavas
+        fig10= plt.plot(r_chavas[:upper_bound50], V_chavas[:upper_bound50], color='forestgreen',   label=label_Chavas) # V_chavas
 
     plt.xlabel('Radius (km)')
     plt.ylabel('Wind speed (m/s)')
@@ -788,8 +804,9 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     text_file.write("Vmax_ini = {:.2f}".format(INI['Willoughby'][4]) + '   | Vmax_fit = {:.2f}\n\n'.format(FIT['Willoughby'][4]))
     text_file.write("CHAVAS\n") # x, alpha, Vmin, Rmax
     text_file.write("Vmax_ini = {:.2f}\n".format(INI['Chavas'][0]))
-    text_file.write("Rfit_ini = {:.2f}\n".format(INI['Chavas'][1] / 1000))
-    text_file.write("Vfit_ini = {:.2f}\n".format(INI['Chavas'][2]))
+    text_file.write("Vmin_ini = {:.2f}\n".format(INI['Chavas'][1]))
+    text_file.write("Rfit_ini = {:.2f}\n".format(INI['Chavas'][2] / 1000))
+    text_file.write("Vfit_ini = {:.2f}\n".format(INI['Chavas'][3]))
     text_file.write('                   | Rmax_fit   = {:.2f}\n'.format(FIT['Chavas'][2] / 1000))
     text_file.write('                   | R0_fit     = {:.2f}\n'.format(FIT['Chavas'][3] / 1000))
     text_file.write('                   | Rmerge_fit = {:.2f}\n'.format(FIT['Chavas'][4] / 1000))
