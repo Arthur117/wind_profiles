@@ -672,6 +672,7 @@ def plot_curves(i, file, r, spdm, INI, FIT, PARAMS):
     # Compute indexes to print in the right window (for Chavas profile only)
     lower_bound   = np.argmax(r_chavas >= r[0] - 0.5) # find the index i so that r_chavas[i] = r[0]
     r_chavas      = r_chavas[lower_bound:]
+    V_chavas      = V_chavas[lower_bound:]
     upper_bound   = np.int(np.floor(len(r_chavas) * len(spdm) / (FIT['Chavas'][3] / 1000.))) # to not plot the entire Chavas profile (because it goes until r0 which is larger than 500 km in the general case)
     index25       = np.int(np.floor(len(r_chavas) * 25 / (FIT['Chavas'][3] / 1000.)))
     upper_bound50 = np.int(np.floor(len(r_chavas) * 50 / (FIT['Chavas'][3] / 1000.)))
@@ -797,7 +798,7 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     
     # SAVE INITIAL AND FIT VALUES
     text_file = open(savepath + ".txt", "w")
-    text_file.write("========================== FITTING COMMON WIND PROFILES ON SAR DATA ==========================\n" + "N°" + i + ": " + filename + "\n\n\n")
+    text_file.write("========================== FITTING COMMON WIND PROFILES ON SAR DATA ==========================\n" + filename + "\n\n\n")
     text_file.write("RANKINE\n") # x, alpha, Vmin, Rmax
     text_file.write("x_ini     = {:.2f}".format(INI['Rankine'][0]) + '   | x_fit     = {:.2f}\n'.format(FIT['Rankine'][0]))
     text_file.write("alpha_ini = {:.2f}".format(INI['Rankine'][1]) + '   | alpha_fit = {:.2f}\n'.format(FIT['Rankine'][1]))
@@ -830,6 +831,63 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     
     return True
 
+def calculate_diff_by_cat(cat, r, spdm, INI, FIT, DIFF, PARAMS):    
+    V_rankine              = rankine_profile(r, *FIT['Rankine'])
+    V_holland              = holland_profile(r, *FIT['Holland'])
+    V_willoughby_no_smooth = willoughby_profile_no_smooth(r, *FIT['Willoughby'])
+    V_chavas               = FIT['Chavas'][1]         # Different from other profiles: here V_chavas has already been computed before, and is stored in FIT['Chavas'][1]
+    r_chavas               = FIT['Chavas'][0] / 1000. # Convert from m to km 
+    
+    # Re-scale Chavas
+    lower_bound   = np.argmax(r_chavas >= r[0] - 0.5) # find the index i so that r_chavas[i] = r[0], i.e to translate Cavas if r[0] = 5km for instance
+    r_chavas      = r_chavas[lower_bound:]
+    V_chavas      = V_chavas[lower_bound:]
+    ind_chavas500 = [np.argwhere(r_chavas >= i)[0] for i in range(0, len(r))] # compute the indices of r = 0, 1, 2, ... ==> e.g convert [0.8, 0.9, 0.9, 1.1, 1.2, 1.5, 1.7, 1.9, 2.1, 2.3] to [0, 3, 8]
+    ind_chavas500 = [int(i) for i in ind_chavas500]
+    V_chavas500   = [V_chavas[i] for i in ind_chavas500]
+    
+    # Compute r* = r/Rmax
+    Rmax   = np.argmax(spdm[:PARAMS['rmax_window']])
+    r_star = r / Rmax
+    
+    # Define labels
+    label_SAR    = 'SAR total wind sped'
+    label_Rankine= 'Rankine profile'
+    label_Holland= 'Holland profile'
+    label_Willou = 'Willoughby -no smoothing'
+    label_Chavas = 'Chavas profile'
+    if PARAMS['tangential_wind_speed']:
+        label_SAR = 'SAR tangential wind speed'
+    if PARAMS['use_curve_fit']==False:
+        x, _, Vmin, Rmax        = INI['Rankine']
+        Lat, pn, pc, _, _, Vmax = INI["Holland"]
+        alpha = (Vmax - Vmin) / Rmax
+        n, X1, _, _, _          = INI['Willoughby']
+        V_rankine = rankine_profile(r, x, alpha, Vmin, Rmax)
+        V_holland = holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax)
+        V_willoughby_no_smooth = willoughby_profile_no_smooth(r, n, X1, Vmin, Rmax, Vmax)
+        label_Rankine= 'Rankine - no fit'
+        label_Holland= 'Holland - no fit'
+        label_Willou = 'Willoughby - no fit'
+    if PARAMS['chavas_vmin']:
+        # translate the profile from Vmin
+        V_chavas    += INI['Chavas'][1]
+        label_Chavas = 'Chavas Vmin - translated'
+        
+    # Compute difference between obs and profile
+    diff_rankine = np.subtract(spdm, V_rankine)
+    diff_holland = np.subtract(spdm, V_holland)
+    diff_willou  = np.subtract(spdm, V_willou)
+    diff_chavas  = np.subtract(spdm, V_chavas)
+        
+    if cat == 'storm':
+        print('ok')
+
+        
+    return DIFF
+
+        
+        
 #================================= B SENSITIVITY FUNCTIONS =====================================
 
 def initialize_B_sensitivity_experiment(spdm, power_law, rho, Lat, pn, pc, print_values):
