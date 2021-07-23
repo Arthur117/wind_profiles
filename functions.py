@@ -463,7 +463,7 @@ def fit_rankine(r, spdm, x, alpha, Vmin, Rmax, PARAMS):
             '\n Vmin_fit  =', "{:.2f}".format(Vmin_fit),
             '\n Rmax_fit  =', "{:.2f}".format(Rmax_fit)        
         )
-    return x_fit, alpha_fit, Vmin_fit, Rmax_fit
+    return x_fit, alpha_fit, Vmin_fit, Rmax_fit    
 
 # Holland
 def holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax):
@@ -646,9 +646,23 @@ def plot_curves(i, file, r, spdm, INI, FIT, PARAMS):
     r_chavas               = FIT['Chavas'][0] / 1000. # Convert from m to km 
     
     label_SAR    = 'SAR total wind sped'
+    label_Rankine= 'Rankine profile'
+    label_Holland= 'Holland profile'
+    label_Willou = 'Willoughby -no smoothing'
     label_Chavas = 'Chavas profile'
     if PARAMS['tangential_wind_speed']:
         label_SAR = 'SAR tangential wind speed'
+    if PARAMS['use_curve_fit']==False:
+        x, _, Vmin, Rmax        = INI['Rankine']
+        Lat, pn, pc, _, _, Vmax = INI["Holland"]
+        alpha = (Vmax - Vmin) / Rmax
+        n, X1, _, _, _          = INI['Willoughby']
+        V_rankine = rankine_profile(r, x, alpha, Vmin, Rmax)
+        V_holland = holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax)
+        V_willoughby_no_smooth = willoughby_profile_no_smooth(r, n, X1, Vmin, Rmax, Vmax)
+        label_Rankine= 'Rankine - no fit'
+        label_Holland= 'Holland - no fit'
+        label_Willou = 'Willoughby - no fit'
     if PARAMS['chavas_vmin']:
         # translate the profile from Vmin
         V_chavas    += INI['Chavas'][1]
@@ -670,9 +684,9 @@ def plot_curves(i, file, r, spdm, INI, FIT, PARAMS):
     # Large scale
     plt.subplot(1, 2, 1)
     fig1 = plt.plot(r, spdm, color='k', linewidth=3,            label=label_SAR)                   # V_obs
-    fig2 = plt.plot(r, V_rankine, color='darkorange',           label='Rankine profile')           # V_rankine
-    fig3 = plt.plot(r, V_holland, color='steelblue',            label='Holland profile')           # V_holland
-    fig4 = plt.plot(r, V_willoughby_no_smooth, color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smooth
+    fig2 = plt.plot(r, V_rankine, color='darkorange',           label=label_Rankine)           # V_rankine
+    fig3 = plt.plot(r, V_holland, color='steelblue',            label=label_Holland)           # V_holland
+    fig4 = plt.plot(r, V_willoughby_no_smooth, color='orchid',  label=label_Willou) # V_willoughby_no_smooth
     fig5 = plt.plot(r_chavas[:upper_bound], V_chavas[:upper_bound], color='forestgreen',   label=label_Chavas) # V_chavas    
     
     plt.xlabel('Radius (km)')
@@ -683,15 +697,15 @@ def plot_curves(i, file, r, spdm, INI, FIT, PARAMS):
     plt.subplot(1, 2, 2)
     if Rmax >= 25:
         fig6 = plt.plot(r[Rmax - 25 : Rmax + 25], spdm[Rmax - 25 : Rmax + 25], color='k', linewidth=3, label=label_SAR)                # V_obs
-        fig7 = plt.plot(r[Rmax - 25 : Rmax + 25], V_rankine[Rmax - 25 : Rmax + 25], color='darkorange', label='Rankine profile')       # V_rankine
-        fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label='Holland profile')       # V_holland
-        fig9 = plt.plot(r[Rmax - 25 : Rmax + 25], V_willoughby_no_smooth[Rmax - 25 : Rmax + 25], color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smooth
+        fig7 = plt.plot(r[Rmax - 25 : Rmax + 25], V_rankine[Rmax - 25 : Rmax + 25], color='darkorange', label=label_Rankine)       # V_rankine
+        fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label=label_Holland)       # V_holland
+        fig9 = plt.plot(r[Rmax - 25 : Rmax + 25], V_willoughby_no_smooth[Rmax - 25 : Rmax + 25], color='orchid',  label=label_Willou) # V_willoughby_no_smooth
         fig10= plt.plot(r_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], V_chavas[Rmax_chavas - index25 : Rmax_chavas + index25], color='forestgreen',   label=label_Chavas) # V_chavas
     else:
         fig6 = plt.plot(r[:50], spdm[:50], color='k', linewidth=3, label=label_SAR)                # V_obs
-        fig7 = plt.plot(r[:50], V_rankine[:50], color='darkorange', label='Rankine profile')       # V_rankine
-        fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label='Holland profile')       # V_holland
-        fig9 = plt.plot(r[:50], V_willoughby_no_smooth[:50], color='orchid',  label='Willoughby - no smoothing') # V_willoughby_no_smoothing
+        fig7 = plt.plot(r[:50], V_rankine[:50], color='darkorange', label=label_Rankine)       # V_rankine
+        fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label=label_Holland)       # V_holland
+        fig9 = plt.plot(r[:50], V_willoughby_no_smooth[:50], color='orchid',  label=label_Willou) # V_willoughby_no_smoothing
         fig10= plt.plot(r_chavas[:upper_bound50], V_chavas[:upper_bound50], color='forestgreen',   label=label_Chavas) # V_chavas
 
     plt.xlabel('Radius (km)')
