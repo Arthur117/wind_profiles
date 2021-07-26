@@ -453,8 +453,14 @@ def initialize_rankine(spdm, x, alpha, PARAMS):
 def fit_rankine(r, spdm, x, alpha, Vmin, Rmax, PARAMS):
     '''Fit the rankine profile given initial values of x, alpha, Vmin and Rmax.
     Returns the optimal parameters found with curve_fit()'''
-    popt, pcov                           = curve_fit(rankine_profile, r, spdm, p0=[x, alpha, Vmin, Rmax], bounds=((0, 0, 0, 5), (1, 50, 50, 500)))
-    x_fit, alpha_fit, Vmin_fit, Rmax_fit = popt[0], popt[1], popt[2], popt[3]
+    if PARAMS['rank_hol_will_vmin']: # fit using Vmin
+        popt, pcov                           = curve_fit(rankine_profile, r, spdm, p0=[x, alpha, Vmin, Rmax], bounds=((0, 0, 0, 5), (1, 50, 50, 500)))
+        x_fit, alpha_fit, Vmin_fit, Rmax_fit = popt[0], popt[1], popt[2], popt[3]
+    else:                            # fit without Vmin
+        popt, pcov                           = curve_fit(lambda r, x, alpha, Rmax: rankine_profile(r, x, alpha, 0., Rmax), r, spdm, p0=[x, alpha, Rmax], bounds=((0, 0, 5), (1, 50, 500)))
+        x_fit, alpha_fit, Rmax_fit = popt[0], popt[1], popt[2]
+        Vmin_fit = 0.0
+        
     if PARAMS['print_values']:
         print(
             'RANKINE - Fit values',
@@ -502,8 +508,13 @@ def initialize_holland(spdm, Lat, pn, pc, PARAMS):
 def fit_holland(r, spdm, Lat, pn, pc, Vmin, Rmax, Vmax, PARAMS):
     '''Fit the Holland profile given initial values of Lat, pn, pc, Vmin, Rmax and Vmax.
     Returns the optimal parameters found with curve_fit()'''
-    popt, pcov = curve_fit(lambda r, pn, pc, Vmin, Rmax, Vmax: holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax), r, spdm, p0=[pn, pc, Vmin, Rmax, Vmax], bounds=((1000 * 100, 850 * 100, 0, 5, 0), (1100 * 100, 1000 * 100, 50, 500, PARAMS['rmax_window']))) # Lat is fixed
-    pn, pc, Vmin, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3], popt[4]
+    if PARAMS['rank_hol_will_vmin']: # fit using Vmin
+        popt, pcov = curve_fit(lambda r, pn, pc, Vmin, Rmax, Vmax: holland_profile(r, Lat, pn, pc, Vmin, Rmax, Vmax), r, spdm, p0=[pn, pc, Vmin, Rmax, Vmax], bounds=((1000 * 100, 850 * 100, 0, 5, 0), (1100 * 100, 1000 * 100, 50, 500, PARAMS['rmax_window']))) # Lat is fixed
+        pn, pc, Vmin, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3], popt[4]
+    else:
+        popt, pcov = curve_fit(lambda r, pn, pc, Rmax, Vmax: holland_profile(r, Lat, pn, pc, 0., Rmax, Vmax), r, spdm, p0=[pn, pc, Rmax, Vmax], bounds=((1000 * 100, 850 * 100, 5, 0), (1100 * 100, 1000 * 100, 500, PARAMS['rmax_window']))) # Lat is fixed
+        pn, pc, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3]
+        Vmin = 0.0
     if PARAMS['print_values']:
         print(
             'HOLLAND - Fit values',
@@ -551,8 +562,13 @@ def initialize_willoughby(spdm, n, PARAMS):
 def fit_willoughby_no_smooth(r, spdm, n, X1, Vmin, Rmax, Vmax, PARAMS):
     '''Fit the Willoughby profile given initial values of n, X1, Vmin, Rmax, Vmax.
     Returns the optimal parameters found with curve_fit()'''
-    popt, pcov              = curve_fit(willoughby_profile_no_smooth, r, spdm, p0=[n, X1, Vmin, Rmax, Vmax], bounds=((0, 0, 0, 5, 0), (50, 5000, 50, 500, PARAMS['rmax_window'])))
-    n, X1, Vmin, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3], popt[4]
+    if PARAMS['rank_hol_will_vmin']: # fit using Vmin
+        popt, pcov              = curve_fit(willoughby_profile_no_smooth, r, spdm, p0=[n, X1, Vmin, Rmax, Vmax], bounds=((0, 0, 0, 5, 0), (50, 5000, 50, 500, PARAMS['rmax_window'])))
+        n, X1, Vmin, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3], popt[4]
+    else:
+        popt, pcov              = curve_fit(lambda r, n, X1, Rmax, Vmax: willoughby_profile_no_smooth(r, n, X1, 0., Rmax, Vmax), r, spdm, p0=[n, X1, Rmax, Vmax], bounds=((0, 0, 5, 0), (50, 5000, 500, PARAMS['rmax_window'])))
+        n, X1, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3]
+        Vmin = 0.0
     if PARAMS['print_values']:
         print(
             'WILLOUGHBY - Fit values',
@@ -663,6 +679,10 @@ def plot_curves(i, file, r, spdm, INI, FIT, PARAMS):
         label_Rankine= 'Rankine - no fit'
         label_Holland= 'Holland - no fit'
         label_Willou = 'Willoughby - no fit'
+    if PARAMS['rank_hol_will_vmin']:
+        label_Rankine = 'Rankine - Vmin optim.'
+        label_Holland = 'Holland - Vmin optim.'
+        label_Willou  = 'Willoughby - Vmin optim.'
     if PARAMS['chavas_vmin']:
         # translate the profile from Vmin
         V_chavas    += INI['Chavas'][1]
@@ -748,8 +768,15 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     
     label_SAR    = 'SAR total wind sped'
     label_Chavas = 'Chavas profile'
+    label_Holland= 'Holland profile'
+    label_Willou = 'Willoughby -no smoothing'
+    label_Chavas = 'Chavas profile'
     if PARAMS['tangential_wind_speed']:
         label_SAR = 'SAR tangential wind speed'
+    if PARAMS['rank_hol_will_vmin']:
+        label_Rankine = 'Rankine - Vmin optim.'
+        label_Holland = 'Holland - Vmin optim.'
+        label_Willou  = 'Willoughby - Vmin optim.'
     if PARAMS['chavas_vmin']:
         # translate the profile from Vmin
         V_chavas    += INI['Chavas'][1]
@@ -938,6 +965,8 @@ def get_filename(filename, PARAMS):
         filename += '_tangential_ws'
     if PARAMS['use_curve_fit']:
         filename += '_curve_fit'
+    if PARAMS['rank_hol_will_vmin']:
+        filename += '_rankHolWill_VminOptimized'
     if PARAMS['chavas_vmin']:
         filename += '_chavas_VminTranslated'
     return filename
