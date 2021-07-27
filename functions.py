@@ -1005,7 +1005,7 @@ def add_to_scatter_list(cat, r, Rmax, Vmax, FIT, RMAX_OBS, RMAX_FIT, VMAX_OBS, V
         VMAX_FIT[i]['Rankine'].append(np.max(V_rankine[:rmax_win]))
         VMAX_FIT[i]['Holland'].append(FIT['Holland'][5])
         VMAX_FIT[i]['Willoughby'].append(FIT['Willoughby'][4])
-        # VMAX_FIT[i]['Chavas'].append(FIT['Chavas'][2] / 1000.)
+        VMAX_FIT[i]['Chavas'].append(np.max(FIT['Chavas'][1]))
         
     return RMAX_OBS, RMAX_FIT, VMAX_OBS, VMAX_FIT
     
@@ -1015,7 +1015,7 @@ def plot_scatter_rmax(RMAX_OBS, RMAX_FIT, PARAMS):
     fig = plt.figure(figsize=(20, 20))
     plt.suptitle("Rmax scatter: SAR versus Param. Profiles", fontsize=18)
     colors = ['grey', 'darkgreen', 'gold', 'orange', 'orangered', 'brown']
-    labels = ['storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5',]
+    labels = ['Storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5',]
     
     # Plot curves
     j = 1
@@ -1042,7 +1042,7 @@ def plot_scatter_vmax(VMAX_OBS, VMAX_FIT, PARAMS):
     fig = plt.figure(figsize=(20, 20))
     plt.suptitle("Vmax scatter: SAR versus Param. Profiles", fontsize=18)
     colors = ['grey', 'darkgreen', 'gold', 'orange', 'orangered', 'brown']
-    labels = ['storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5',]
+    labels = ['Storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5',]
     
     # Plot curves
     j = 1
@@ -1052,7 +1052,7 @@ def plot_scatter_vmax(VMAX_OBS, VMAX_FIT, PARAMS):
         # plt.gca().set_title(profile)
         for i in range(6):
             plt.scatter(VMAX_OBS[i], VMAX_FIT[i][profile], c=colors[i], label=labels[i])
-        plt.plot([0, 300], [0, 300], color = 'k', linestyle = 'solid')
+        plt.plot([0, 75], [0, 75], color = 'k', linestyle = 'solid')
         ax.set_aspect('equal', adjustable='box')
         plt.xlabel('SAR')
         plt.ylabel(profile)
