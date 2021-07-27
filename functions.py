@@ -983,6 +983,67 @@ def get_filename(filename, PARAMS):
         filename += '_chavas_VminTranslated'
     return filename
 
+def calculate_fitted_params_by_cat(cat, FIT, FIT_PARAMS, PARAMS):
+    # Determine the cat. index
+    cat = np.array(cat)
+    if cat == 'storm' or cat == 'dep':
+        i = 0
+    else: # then it's 'cat-0', 1, ..., or 5
+        i = int(str(cat)[-1])
+    
+    FIT_PARAMS[i]['Rankine'].append(FIT['Rankine'])
+    FIT_PARAMS[i]['Holland'].append(FIT['Holland'])
+    FIT_PARAMS[i]['Willoughby'].append(FIT['Willoughby'])
+    FIT_PARAMS[i]['Chavas'].append(FIT['Chavas'][2:]) # rmax, r0, rmerge, Vmerge
+        
+    return FIT_PARAMS
+
+def plot_fitted_params_by_cat(FIT_PARAMS, PARAMS):
+    subtitles = ['Storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5']
+    print(type(FIT_PARAMS[4]['Rankine']))
+    print(type(FIT_PARAMS[4]['Rankine'][0]))
+    print(type(np.array(FIT_PARAMS[4]['Rankine'])))
+    
+    for i in range(6):
+        for profile in FIT_PARAMS[i].keys():
+            FIT_PARAMS[i][profile] = np.array(FIT_PARAMS[i][profile])
+        print(np.array(FIT_PARAMS[4]['Rankine']).shape)
+        print('\n*** ' + subtitles[i] + ' mean parameters:')
+        if len(FIT_PARAMS[i]['Rankine']) == 0:
+            print("CAVEAT: list of tuples FIT_PARAMS is empty")
+        else:
+            print(
+                '=> RANKINE', # x, alpha, Vmin, Rmax
+                '\n x     =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Rankine'][:, 0])),
+                '\n alpha =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Rankine'][:, 1])),
+                '\n Vmin  =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Rankine'][:, 2])),
+                '\n Rmax  =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Rankine'][:, 3]))       
+            )
+            print(
+                '=> HOLLAND', # (Lat), pn, pc, Vmin, Rmax, Vmax
+                '\n pn    =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Holland'][:, 1])),
+                '\n pc    =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Holland'][:, 2])),
+                '\n Vmin  =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Holland'][:, 3])),
+                '\n Rmax  =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Holland'][:, 4])),
+                '\n Vmax  =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Holland'][:, 5]))
+            )
+            print(
+                '=> WILLOUGHBY', # n, X1, Vmin, Rmax, Vmax
+                '\n n    =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Willoughby'][:, 0])),
+                '\n X1   =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Willoughby'][:, 1])),
+                '\n Vmin =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Willoughby'][:, 2])),
+                '\n Rmax =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Willoughby'][:, 3])),
+                '\n Vmax =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Willoughby'][:, 4]))
+            )
+            print(
+                '=> CHAVAS',
+                '\n Rmax   =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 0])),
+                '\n R0     =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 1])),
+                '\n Rmerge =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 2])),
+                '\n Vmerge =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 3]))
+            ) 
+    return None
+
 def add_to_scatter_list(cat, r, Rmax, Vmax, FIT, RMAX_OBS, RMAX_FIT, VMAX_OBS, VMAX_FIT, PARAMS):
     # Determine the cat. index
     cat = np.array(cat)
