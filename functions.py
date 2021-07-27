@@ -862,9 +862,7 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
 #================================= COMPARISON BY CATEGORIES =====================================
 
 
-def calculate_diff_by_cat(cat, Rmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):
-    cat = np.array(cat)
-    
+def calculate_diff_by_cat(cat, Rmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):   
     # Compute fitted profiles
     V_rankine              = rankine_profile(r, *FIT['Rankine'])
     V_holland              = holland_profile(r, *FIT['Holland'])
@@ -901,6 +899,7 @@ def calculate_diff_by_cat(cat, Rmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):
         nbcat_rank_hol_will_filled = np.concatenate((nbcat_rank_hol_will, [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
         
     # Determine the cat. index
+    cat = np.array(cat)
     if cat == 'storm' or cat == 'dep':
         i = 0
     else: # then it's 'cat-0', 1, ..., or 5
@@ -983,6 +982,89 @@ def get_filename(filename, PARAMS):
     if PARAMS['chavas_vmin']:
         filename += '_chavas_VminTranslated'
     return filename
+
+def add_to_scatter_list(cat, r, Rmax, Vmax, FIT, RMAX_OBS, RMAX_FIT, VMAX_OBS, VMAX_FIT, PARAMS):
+    # Determine the cat. index
+    cat = np.array(cat)
+    if cat == 'storm' or cat == 'dep':
+        i = 0
+    else: # then it's 'cat-0', 1, ..., or 5
+        i = int(str(cat)[-1])
+        
+    # Update Rmax lists
+    rmax_win = PARAMS['rmax_window']
+    if Rmax < rmax_win and FIT['Rankine'][3] < rmax_win and FIT['Holland'][4] < rmax_win and FIT['Willoughby'][3] < rmax_win:
+        RMAX_OBS[i].append(Rmax)
+        RMAX_FIT[i]['Rankine'].append(FIT['Rankine'][3])
+        RMAX_FIT[i]['Holland'].append(FIT['Holland'][4])
+        RMAX_FIT[i]['Willoughby'].append(FIT['Willoughby'][3])
+        RMAX_FIT[i]['Chavas'].append(FIT['Chavas'][2] / 1000.)
+        
+        VMAX_OBS[i].append(Vmax)
+        V_rankine = rankine_profile(r, *FIT['Rankine'])
+        VMAX_FIT[i]['Rankine'].append(np.max(V_rankine[:rmax_win]))
+        VMAX_FIT[i]['Holland'].append(FIT['Holland'][5])
+        VMAX_FIT[i]['Willoughby'].append(FIT['Willoughby'][4])
+        # VMAX_FIT[i]['Chavas'].append(FIT['Chavas'][2] / 1000.)
+        
+    return RMAX_OBS, RMAX_FIT, VMAX_OBS, VMAX_FIT
+    
+def plot_scatter_rmax(RMAX_OBS, RMAX_FIT, PARAMS):
+    # Define figure attributes
+    filename = 'rmax_scatterplot'
+    fig = plt.figure(figsize=(20, 20))
+    plt.suptitle("Rmax scatter: SAR versus Param. Profiles", fontsize=18)
+    colors = ['grey', 'darkgreen', 'gold', 'orange', 'orangered', 'brown']
+    labels = ['storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5',]
+    
+    # Plot curves
+    j = 1
+    for profile in RMAX_FIT[0].keys():
+        ax = fig.add_subplot(2, 2, j)
+        j += 1
+        # plt.gca().set_title(profile)
+        for i in range(6):
+            plt.scatter(RMAX_OBS[i], RMAX_FIT[i][profile], c=colors[i], label=labels[i])
+        plt.plot([0, 300], [0, 300], color = 'k', linestyle = 'solid')
+        ax.set_aspect('equal', adjustable='box')
+        plt.xlabel('SAR')
+        plt.ylabel(profile)
+        plt.legend();plt.grid()
+        
+    if PARAMS['save_scatter']:
+        plt.savefig(PARAMS['save_dir'] + filename)
+    
+    return None
+
+def plot_scatter_vmax(VMAX_OBS, VMAX_FIT, PARAMS):
+    # Define figure attributes
+    filename = 'vmax_scatterplot'
+    fig = plt.figure(figsize=(20, 20))
+    plt.suptitle("Vmax scatter: SAR versus Param. Profiles", fontsize=18)
+    colors = ['grey', 'darkgreen', 'gold', 'orange', 'orangered', 'brown']
+    labels = ['storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5',]
+    
+    # Plot curves
+    j = 1
+    for profile in VMAX_FIT[0].keys():
+        ax = fig.add_subplot(2, 2, j)
+        j += 1
+        # plt.gca().set_title(profile)
+        for i in range(6):
+            plt.scatter(VMAX_OBS[i], VMAX_FIT[i][profile], c=colors[i], label=labels[i])
+        plt.plot([0, 300], [0, 300], color = 'k', linestyle = 'solid')
+        ax.set_aspect('equal', adjustable='box')
+        plt.xlabel('SAR')
+        plt.ylabel(profile)
+        plt.legend();plt.grid()
+        
+    if PARAMS['save_scatter']:
+        plt.savefig(PARAMS['save_dir'] + filename)
+    
+    return None
+    
+    
+    
         
 #================================= B SENSITIVITY FUNCTIONS =====================================
 
