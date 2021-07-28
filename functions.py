@@ -420,7 +420,9 @@ def fit_chavas(Vmax, Vmin, Rfit, Vfit, fcor, Cdvary, Cd, w_cool, CkCdvary, CkCd,
             '\n Rmerge_fit =', "{:.2f}".format(rmerge),
             '\n Vmerge_fit =', "{:.2f}".format(Vmerge)
 
-        ) 
+        )
+    if PARAMS['chavas_vmin']:
+        VV += Vmin
     return rr, VV, rmax, r0, rmerge, Vmerge
 
 # Rankine
@@ -684,8 +686,6 @@ def plot_curves(i, file, r, spdm, INI, FIT, PARAMS):
         label_Holland = 'Holland - Vmin optim.'
         label_Willou  = 'Willoughby - Vmin optim.'
     if PARAMS['chavas_vmin']:
-        # translate the profile from Vmin
-        V_chavas    += INI['Chavas'][1]
         label_Chavas = 'Chavas Vmin - translated'
     
     Rmax          = np.argmax(spdm[:PARAMS['rmax_window']]) # center on Rmax
@@ -778,8 +778,6 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
         label_Holland = 'Holland - Vmin optim.'
         label_Willou  = 'Willoughby - Vmin optim.'
     if PARAMS['chavas_vmin']:
-        # translate the profile from Vmin
-        V_chavas    += INI['Chavas'][1]
         label_Chavas = 'Chavas Vmin - translated'
     
     Rmax          = np.argmax(spdm[:PARAMS['rmax_window']]) # center on Rmax
@@ -1000,14 +998,10 @@ def calculate_fitted_params_by_cat(cat, FIT, FIT_PARAMS, PARAMS):
 
 def plot_fitted_params_by_cat(FIT_PARAMS, PARAMS):
     subtitles = ['Storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5']
-    print(type(FIT_PARAMS[4]['Rankine']))
-    print(type(FIT_PARAMS[4]['Rankine'][0]))
-    print(type(np.array(FIT_PARAMS[4]['Rankine'])))
     
     for i in range(6):
         for profile in FIT_PARAMS[i].keys():
             FIT_PARAMS[i][profile] = np.array(FIT_PARAMS[i][profile])
-        print(np.array(FIT_PARAMS[4]['Rankine']).shape)
         print('\n*** ' + subtitles[i] + ' mean parameters:')
         if len(FIT_PARAMS[i]['Rankine']) == 0:
             print("CAVEAT: list of tuples FIT_PARAMS is empty")
@@ -1037,9 +1031,9 @@ def plot_fitted_params_by_cat(FIT_PARAMS, PARAMS):
             )
             print(
                 '=> CHAVAS',
-                '\n Rmax   =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 0])),
-                '\n R0     =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 1])),
-                '\n Rmerge =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 2])),
+                '\n Rmax   =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 0]) / 1000),
+                '\n R0     =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 1]) / 1000),
+                '\n Rmerge =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 2]) / 1000),
                 '\n Vmerge =', "{:.2f}".format(np.mean(FIT_PARAMS[i]['Chavas'][:, 3]))
             ) 
     return None
