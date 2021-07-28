@@ -615,7 +615,7 @@ def compute_mean_wind_spd(ds, r_window_len):
     ds_ws = np.array(ds['wind_speed'])
     # Possible to call griddata() without using meshgrid() before? 
     spd   = griddata((ds_r.flatten(), ds_th.flatten()), ds_ws.flatten(), (r, th), method='nearest')
-    spdm   = np.nanmean(spd, axis=0)  
+    spdm  = np.nanmean(spd, axis=0)  
     return spdm
 
 def compute_mean_tangential_wind_spd(ds, r_window_len):
@@ -632,8 +632,27 @@ def compute_mean_tangential_wind_spd(ds, r_window_len):
     ds_ws  = np.multiply(ds_tws, ds_aws)             # azimuthal wind
     # Possible to call griddata() without using meshgrid() before? 
     spd    = griddata((ds_r.flatten(), ds_th.flatten()), ds_ws.flatten(), (r, th), method='nearest')
-    spdm_ch= np.nanmean(spd, axis=0)  
-    return spdm_ch
+    spdm   = np.nanmean(spd, axis=0)  
+    return spdm
+
+def compute_mean_tangential_wind_spd_quadrants(ds, SPD, PARAMS):
+    # Define (r, theta) grid
+    r      = np.arange(PARAMS['r_window_len'])
+    th     = np.arange(361)
+    r, th  = np.meshgrid(r, th)
+    ds_r   = np.array(ds['r_polar'])
+    ds_th  = np.mod(np.array(ds['theta']) * 180. / np.pi, 360) # convert theta from radians to degrees
+    ds_tws = np.array(ds['wind_speed'])
+    ds_aws = np.abs(np.array(ds['tangential_wind'])) # normed azimuthal wind
+    ds_ws  = np.multiply(ds_tws, ds_aws)             # azimuthal wind
+    spd    = griddata((ds_r.flatten(), ds_th.flatten()), ds_ws.flatten(), (r, th), method='nearest') # np.array of shape (361, 501)
+    
+    # Compute mean spd in each quadrant
+    i = 0
+    for quadrant in SPD.keys():
+        SPD[quadrant] = np.nanmean(spd[i:i + 90, :], axis=0)  
+        i += 90
+    return SPD
 
 def initialize_radius(spdm):
     '''Given the spdm, returns the largest radius (and asociated spdm) on which the profile can be fitted. 
@@ -857,7 +876,7 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     return True
 
 
-#================================= COMPARISON BY CATEGORIES =====================================
+#================================= COMPARISON BY CATEGORY =====================================
 
 
 def calculate_diff_by_cat(cat, Rmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):   
@@ -1117,8 +1136,6 @@ def plot_scatter_vmax(VMAX_OBS, VMAX_FIT, PARAMS):
         plt.savefig(PARAMS['save_dir'] + filename)
     
     return None
-    
-    
     
         
 #================================= B SENSITIVITY FUNCTIONS =====================================
