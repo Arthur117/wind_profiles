@@ -946,9 +946,11 @@ def calculate_diff_by_cat(cat, Rmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):
 def plot_comp_by_cat(DIFF, NB_CAT, PARAMS, save):
     # Initialize radius
     if PARAMS['r_Rmax_axis']:
-        r = np.linspace(0., PARAMS['r_Rmax_scale'], num=PARAMS['r_Rmax_num_pts']) # axis of reference
-    else:   
-        r = np.arange(501)
+        r      = np.linspace(0., PARAMS['r_Rmax_scale'], num=PARAMS['r_Rmax_num_pts']) # axis of reference
+        xlabel = 'r* = r/Rmax'
+    else:     
+        r      = np.arange(501)
+        xlabel = 'Radius (km)'
     
     # Define figure attributes
     filename = get_filename('all_profiles_comparison_by_category', PARAMS)
@@ -978,7 +980,7 @@ def plot_comp_by_cat(DIFF, NB_CAT, PARAMS, save):
             else:
                 mean_diff = np.divide(DIFF[i][profile], NB_CAT[i]['Rank-Hol-Will'])
             plt.plot(r, mean_diff, color=COLORS[profile], label=profile)
-        plt.xlabel('Radius (km)')
+        plt.xlabel(xlabel)
         plt.ylabel('Wind speed (m/s)')
         ax.set_xticks(np.arange(0, PARAMS['r_Rmax_scale'], 1))
         plt.legend();plt.grid()
@@ -1136,7 +1138,52 @@ def plot_scatter_vmax(VMAX_OBS, VMAX_FIT, PARAMS):
         plt.savefig(PARAMS['save_dir'] + filename)
     
     return None
-    
+
+def plot_comp_by_cat_by_quad(DIFF_QUAD, NB_CAT_QUAD, PARAMS, save):
+    for i in range(6):
+        # Initialize radius
+        if PARAMS['r_Rmax_axis']:
+            r = np.linspace(0., PARAMS['r_Rmax_scale'], num=PARAMS['r_Rmax_num_pts']) # axis of reference
+        else:   
+            r = np.arange(501)
+
+        # Define figure attributes
+        filename = get_filename('all_profiles_comparison_by_quadrant_cat%d' % i, PARAMS)
+        fig = plt.figure(figsize=(25, 35))
+        # fig = plt.figure()
+        plt.suptitle("Mean difference between SAR wind speed and common parametric profiles - Cat.%d" % i , fontsize=18)
+        COLORS = {
+            'Rankine':    'darkorange',
+            'Holland':    'steelblue',
+            'Willoughby': 'orchid',
+            'Chavas':     'forestgreen'
+        }
+        subtitles = ['NE', 'NW', 'SW', 'SE']
+
+        # Plot curves
+        j = 0
+        for quadrant in DIFF_QUAD.keys():
+            ax = fig.add_subplot(4, 1, j + 1)
+            plt.gca().set_title(subtitles[j])
+            for profile in DIFF_QUAD[quadrant][i].keys():
+                if profile == 'Chavas':
+                    mean_diff = np.divide(DIFF_QUAD[quadrant][i][profile], NB_CAT_QUAD[quadrant][i][profile])
+                else:
+                    mean_diff = np.divide(DIFF_QUAD[quadrant][i][profile], NB_CAT_QUAD[quadrant][i]['Rank-Hol-Will'])
+                plt.plot(r, mean_diff, color=COLORS[profile], label=profile)
+            plt.xlabel('r* = r/Rmax')
+            plt.ylabel('Wind speed (m/s)')
+            ax.set_xticks(np.arange(0, PARAMS['r_Rmax_scale'], 1))
+            plt.legend();plt.grid()
+            j += 1
+        
+        # Save figure
+        if save:
+            plt.savefig(PARAMS['save_dir'] + filename)
+        plt.show()
+        
+    return None
+
         
 #================================= B SENSITIVITY FUNCTIONS =====================================
 
