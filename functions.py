@@ -1184,6 +1184,68 @@ def plot_comp_by_cat_by_quad(DIFF_QUAD, NB_CAT_QUAD, PARAMS, save):
         
     return None
 
+def plot_scatter_rmax_by_quad(RMAX_OBS_QUAD, RMAX_FIT_QUAD, PARAMS):
+    for quadrant in RMAX_OBS_QUAD.keys():
+        # Define figure attributes
+        filename = 'rmax_scatterplot_quad_' + quadrant
+        fig = plt.figure(figsize=(20, 20))
+        plt.suptitle("Rmax scatter: SAR versus Param. Profiles - Quadrant " + quadrant, fontsize=18)
+        colors = ['grey', 'darkgreen', 'gold', 'orange', 'orangered', 'brown']
+        labels = ['Storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5',]
+
+        # Plot curves
+        j = 1
+        for profile in RMAX_FIT_QUAD[quadrant][0].keys():
+            ax = fig.add_subplot(2, 2, j)
+            j += 1
+            # plt.gca().set_title(profile)
+            for i in range(6):
+                plt.scatter(RMAX_OBS_QUAD[quadrant][i], RMAX_FIT_QUAD[quadrant][i][profile], c=colors[i], label=labels[i])
+            plt.plot([0, 300], [0, 300], color = 'k', linestyle = 'solid')
+            ax.set_aspect('equal', adjustable='box')
+            plt.xlabel('SAR')
+            plt.ylabel(profile)
+            plt.legend();plt.grid()
+
+        if PARAMS['save_scatter']:
+            plt.savefig(PARAMS['save_dir'] + filename)
+        plt.show()
+    
+    return None
+
+def plot_scatter_vmax_by_quad(VMAX_OBS_QUAD, VMAX_FIT_QUAD, PARAMS):
+    for quadrant in VMAX_OBS_QUAD.keys(): 
+        # Define figure attributes
+        filename = 'vmax_scatterplot_quad_' + quadrant
+        fig = plt.figure(figsize=(20, 20))
+        plt.suptitle("Vmax scatter: SAR versus Param. Profiles - Quadrant " + quadrant, fontsize=18)
+        colors = ['grey', 'darkgreen', 'gold', 'orange', 'orangered', 'brown']
+        labels = ['Storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5',]
+
+        # Plot curves
+        j = 1
+        for profile in VMAX_FIT_QUAD[quadrant][0].keys():
+            ax = fig.add_subplot(2, 2, j)
+            j += 1
+            # plt.gca().set_title(profile)
+            for i in range(6):
+                plt.scatter(VMAX_OBS_QUAD[quadrant][i], VMAX_FIT_QUAD[quadrant][i][profile], c=colors[i], label=labels[i])
+            plt.plot([0, 75], [0, 75], color = 'k', linestyle = 'solid')
+            ax.set_aspect('equal', adjustable='box')
+            plt.xlabel('SAR')
+            plt.ylabel(profile)
+            plt.legend();plt.grid()
+
+        if PARAMS['save_scatter']:
+            plt.savefig(PARAMS['save_dir'] + filename)
+        plt.show()
+    
+    return None
+
+
+
+
+
         
 #================================= B SENSITIVITY FUNCTIONS =====================================
 
