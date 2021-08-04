@@ -1110,12 +1110,33 @@ def plot_scatter_rmax(RMAX_OBS, RMAX_FIT, PARAMS):
         # plt.gca().set_title(profile)
         for i in range(6):
             plt.scatter(RMAX_OBS[i], RMAX_FIT[i][profile], c=colors[i], label=labels[i])
-        plt.plot([0, 300], [0, 300], color = 'k', linestyle = 'solid')
+        
+        # Plot linear regression and identity curves
+        plt.plot([0, 300], [0, 300], color = 'k', linestyle = 'solid') # Identity
+        x_obs = []
+        y_prf = []
+        for i in range(6):
+            x_obs += RMAX_OBS[i]
+            y_prf += RMAX_FIT[i][profile]
+        a, b = np.polyfit(x_obs, y_prf, 1)
+        x = np.linspace(0, 300, 20)
+        plt.plot(x, a * x + b, color = 'k', linestyle = 'dashed')
+        
+        # Plot R2 and regression coeff
+        r2 = compute_r2(x_obs, y_prf)
+        plt.text(0.7, 0.3, 'R^2 = {:.2f}\n'.format(r2) + 'y = {:.2f} * x + {:.2f}'.format(a, b), transform = ax.transAxes)
+        print(r2)
+        
+        # TODO: print R2, print y = a * x + b on the plot
+        
+        # Set legends
         ax.set_aspect('equal', adjustable='box')
         plt.xlabel('SAR')
         plt.ylabel(profile)
         plt.legend();plt.grid()
-        
+    
+    print(x_obs)
+    
     if PARAMS['save_scatter']:
         plt.savefig(PARAMS['save_dir'] + filename)
     
@@ -1147,6 +1168,12 @@ def plot_scatter_vmax(VMAX_OBS, VMAX_FIT, PARAMS):
         plt.savefig(PARAMS['save_dir'] + filename)
     
     return None
+
+def compute_r2(x_obs, y_prf):
+    num = np.sum(np.power(np.subtract(x_obs, y_prf), 2))
+    den = np.sum(np.power(np.subtract(x_obs, np.mean(x_obs)), 2))
+    r2 = 1 - (num / den)
+    return r2
 
 def plot_comp_by_cat_by_quad(DIFF_QUAD, NB_CAT_QUAD, PARAMS, save):
     for i in range(6):
