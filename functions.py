@@ -625,6 +625,10 @@ def compute_mean_tangential_wind_spd(ds, r_window_len):
     th     = np.arange(361)
     r, th  = np.meshgrid(r, th)
     ds_r   = np.array(ds['r_polar'])
+    
+    # Flip TCs of Southern hemisphere
+    if ds['lat_ref'] < 0: 
+        ds['theta'] = np.pi - ds['theta'] 
 
     ds_th  = np.mod(np.array(ds['theta']) * 180. / np.pi, 360) # convert theta from radians to degrees
     ds_tws = np.array(ds['wind_speed'])
@@ -641,6 +645,11 @@ def compute_mean_tangential_wind_spd_quadrants(ds, SPD, PARAMS):
     th     = np.arange(361)
     r, th  = np.meshgrid(r, th)
     ds_r   = np.array(ds['r_polar'])
+    
+    # Flip TCs of Southern hemisphere
+    if ds['lat_ref'] < 0: 
+        ds['theta'] = np.pi - ds['theta']
+        
     ds_th  = np.mod(np.array(ds['theta']) * 180. / np.pi, 360) # convert theta from radians to degrees
     ds_tws = np.array(ds['wind_speed'])
     ds_aws = np.abs(np.array(ds['tangential_wind'])) # normed azimuthal wind
@@ -1185,26 +1194,26 @@ def plot_comp_by_cat_by_quad(DIFF_QUAD, NB_CAT_QUAD, PARAMS, save):
     return None
 
 def plot_scatter_rmax_by_quad(RMAX_OBS_QUAD, RMAX_FIT_QUAD, PARAMS):
-    for quadrant in RMAX_OBS_QUAD.keys():
+    for profile in RMAX_FIT_QUAD['FR'][0].keys():
         # Define figure attributes
-        filename = 'rmax_scatterplot_quad_' + quadrant
+        filename = 'rmax_scatterplot_' + profile
         fig = plt.figure(figsize=(20, 20))
-        plt.suptitle("Rmax scatter: SAR versus Param. Profiles - Quadrant " + quadrant, fontsize=18)
+        plt.suptitle("Rmax scatter - SAR versus " + profile, fontsize=18)
         colors = ['grey', 'darkgreen', 'gold', 'orange', 'orangered', 'brown']
         labels = ['Storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5',]
 
         # Plot curves
         j = 1
-        for profile in RMAX_FIT_QUAD[quadrant][0].keys():
-            ax = fig.add_subplot(2, 2, j)
+        for quadrant in RMAX_OBS_QUAD.keys():
+            ax = fig.add_subplot(2, 2, reindex(j))
             j += 1
-            # plt.gca().set_title(profile)
+            plt.gca().set_title(quadrant, fontsize=16)
             for i in range(6):
                 plt.scatter(RMAX_OBS_QUAD[quadrant][i], RMAX_FIT_QUAD[quadrant][i][profile], c=colors[i], label=labels[i])
             plt.plot([0, 300], [0, 300], color = 'k', linestyle = 'solid')
             ax.set_aspect('equal', adjustable='box')
-            plt.xlabel('SAR')
-            plt.ylabel(profile)
+            plt.xlabel('SAR', fontsize=16)
+            plt.ylabel(profile, fontsize=16)
             plt.legend();plt.grid()
 
         if PARAMS['save_scatter']:
@@ -1214,26 +1223,26 @@ def plot_scatter_rmax_by_quad(RMAX_OBS_QUAD, RMAX_FIT_QUAD, PARAMS):
     return None
 
 def plot_scatter_vmax_by_quad(VMAX_OBS_QUAD, VMAX_FIT_QUAD, PARAMS):
-    for quadrant in VMAX_OBS_QUAD.keys(): 
+    for profile in VMAX_FIT_QUAD['FR'][0].keys(): 
         # Define figure attributes
-        filename = 'vmax_scatterplot_quad_' + quadrant
+        filename = 'vmax_scatterplot_' + profile
         fig = plt.figure(figsize=(20, 20))
-        plt.suptitle("Vmax scatter: SAR versus Param. Profiles - Quadrant " + quadrant, fontsize=18)
+        plt.suptitle("Vmax scatter - SAR versus " + profile, fontsize=18)
         colors = ['grey', 'darkgreen', 'gold', 'orange', 'orangered', 'brown']
         labels = ['Storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5',]
 
         # Plot curves
         j = 1
-        for profile in VMAX_FIT_QUAD[quadrant][0].keys():
-            ax = fig.add_subplot(2, 2, j)
+        for quadrant in VMAX_OBS_QUAD.keys():
+            ax = fig.add_subplot(2, 2, reindex(j))
             j += 1
-            # plt.gca().set_title(profile)
+            plt.gca().set_title(quadrant, fontsize=16)
             for i in range(6):
                 plt.scatter(VMAX_OBS_QUAD[quadrant][i], VMAX_FIT_QUAD[quadrant][i][profile], c=colors[i], label=labels[i])
             plt.plot([0, 75], [0, 75], color = 'k', linestyle = 'solid')
             ax.set_aspect('equal', adjustable='box')
-            plt.xlabel('SAR')
-            plt.ylabel(profile)
+            plt.xlabel('SAR', fontsize=16)
+            plt.ylabel(profile, fontsize=16)
             plt.legend();plt.grid()
 
         if PARAMS['save_scatter']:
@@ -1242,9 +1251,19 @@ def plot_scatter_vmax_by_quad(VMAX_OBS_QUAD, VMAX_FIT_QUAD, PARAMS):
     
     return None
 
-
-
-
+def reindex(j):
+    '''Given a value of j, returns:
+    if j = 1, returns 2
+    if j = 2, returns 1
+    if j = 3, returns 3
+    if j = 4, returns 4'''
+    
+    if j == 1:
+        return 2
+    elif j == 2:
+        return 1
+    else:
+        return j
 
         
 #================================= B SENSITIVITY FUNCTIONS =====================================
