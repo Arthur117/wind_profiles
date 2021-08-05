@@ -952,7 +952,7 @@ def calculate_diff_by_cat(cat, Rmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):
         
     return DIFF, NB_CAT
 
-def plot_comp_by_cat(DIFF, NB_CAT, PARAMS, save):
+def plot_comp_by_cat(DIFF, NB_CAT, PARAMS):
     # Initialize radius
     if PARAMS['r_Rmax_axis']:
         r      = np.linspace(0., PARAMS['r_Rmax_scale'], num=PARAMS['r_Rmax_num_pts']) # axis of reference
@@ -981,21 +981,33 @@ def plot_comp_by_cat(DIFF, NB_CAT, PARAMS, save):
     
     # Plot curves
     for i in range(6):
+        RMSE = {
+        'Rankine':    0.,
+        'Holland':    0.,
+        'Willoughby': 0.,
+        'Chavas':     0. 
+        }
         ax = fig.add_subplot(6, 1, i + 1)
-        plt.gca().set_title(subtitles[i])
+        plt.gca().set_title(subtitles[i], fontsize=16)
         for profile in DIFF[i].keys():
             if profile == 'Chavas':
                 mean_diff = np.divide(DIFF[i][profile], NB_CAT[i][profile])
             else:
                 mean_diff = np.divide(DIFF[i][profile], NB_CAT[i]['Rank-Hol-Will'])
             plt.plot(r, mean_diff, color=COLORS[profile], label=profile)
-        plt.xlabel(xlabel)
-        plt.ylabel('Wind speed (m/s)')
+            
+            # Compute and plot RMSEs
+            RMSE[profile] = rmse(mean_diff, [0.] * len(mean_diff))
+        plt.text(0.4, 0.78, 'RMSEs \nRankine = {:.2f}   Holland = {:.2f}\n'.format(RMSE['Rankine'], RMSE['Holland']) + 'Willoughby = {:.2f}   Chavas = {:.2f}'.format(RMSE['Willoughby'], RMSE['Chavas']), fontsize=14, transform = ax.transAxes, bbox=dict(facecolor='white', edgecolor='k', pad=10.0))
+        
+        # Set legends
+        plt.xlabel(xlabel, fontsize=14)
+        plt.ylabel('Wind speed (m/s)', fontsize=14)
         ax.set_xticks(np.arange(0, PARAMS['r_Rmax_scale'], 1))
         plt.legend();plt.grid()
     
     # Save figure
-    if save:
+    if PARAMS['save_comparison']:
         plt.savefig(PARAMS['save_dir'] + filename)
         
     return None
@@ -1199,7 +1211,7 @@ def plot_comp_by_cat_by_quad(DIFF_QUAD, NB_CAT_QUAD, PARAMS, save):
             'Willoughby': 'orchid',
             'Chavas':     'forestgreen'
         }
-        subtitles = ['NE', 'NW', 'SW', 'SE']
+        subtitles = ['FR', 'FL', 'RL', 'RR']
 
         # Plot curves
         j = 0
@@ -1242,7 +1254,15 @@ def plot_scatter_rmax_by_quad(RMAX_OBS_QUAD, RMAX_FIT_QUAD, PARAMS):
             plt.gca().set_title(quadrant, fontsize=16)
             for i in range(6):
                 plt.scatter(RMAX_OBS_QUAD[quadrant][i], RMAX_FIT_QUAD[quadrant][i][profile], c=colors[i], label=labels[i])
-            plt.plot([0, 300], [0, 300], color = 'k', linestyle = 'solid')
+                
+            # Plot identity curve, linear regression and R2
+            plt.plot([0, 300], [0, 300], color = 'k', linestyle = 'solid') # Identity
+            a, b, r2 = regression(RMAX_OBS_QUAD[quadrant], RMAX_FIT_QUAD[quadrant], i, profile)
+            x = np.linspace(0, 300, 20)
+            plt.plot(x, a * x + b, color = 'k', linestyle = 'dashed')
+            plt.text(0.65, 0.3, r'$R^2 = {:.2f}$'.format(r2) + '\ny = {:.2f} * x + {:.2f}'.format(a, b), fontsize=14, transform = ax.transAxes)
+            
+            # Set legends
             ax.set_aspect('equal', adjustable='box')
             plt.xlabel('SAR', fontsize=16)
             plt.ylabel(profile, fontsize=16)
@@ -1271,7 +1291,15 @@ def plot_scatter_vmax_by_quad(VMAX_OBS_QUAD, VMAX_FIT_QUAD, PARAMS):
             plt.gca().set_title(quadrant, fontsize=16)
             for i in range(6):
                 plt.scatter(VMAX_OBS_QUAD[quadrant][i], VMAX_FIT_QUAD[quadrant][i][profile], c=colors[i], label=labels[i])
-            plt.plot([0, 75], [0, 75], color = 'k', linestyle = 'solid')
+                
+            # Plot identity curve, linear regression and R2
+            plt.plot([0, 75], [0, 75], color = 'k', linestyle = 'solid') # Identity
+            a, b, r2 = regression(VMAX_OBS_QUAD[quadrant], VMAX_FIT_QUAD[quadrant], i, profile)
+            x = np.linspace(0, 75, 20)
+            plt.plot(x, a * x + b, color = 'k', linestyle = 'dashed')
+            plt.text(0.65, 0.3, r'$R^2 = {:.2f}$'.format(r2) + '\ny = {:.2f} * x + {:.2f}'.format(a, b), fontsize=14, transform = ax.transAxes)
+        
+            # Set legends
             ax.set_aspect('equal', adjustable='box')
             plt.xlabel('SAR', fontsize=16)
             plt.ylabel(profile, fontsize=16)
@@ -1436,7 +1464,7 @@ def plot_B_sensitivity_experiment(i, file, r, spdm, INI, FIT):
     return True
 
 def rmse(predictions, targets):
-    return np.sqrt(np.mean((predictions - targets) ** 2))
+    return np.sqrt(np.mean(np.power(np.subtract(predictions, targets), 2)))
 
 
 #================================= 2B SENSITIVITY FUNCTIONS =====================================
