@@ -1111,31 +1111,18 @@ def plot_scatter_rmax(RMAX_OBS, RMAX_FIT, PARAMS):
         for i in range(6):
             plt.scatter(RMAX_OBS[i], RMAX_FIT[i][profile], c=colors[i], label=labels[i])
         
-        # Plot linear regression and identity curves
+        # Plot identity curve, linear regression and R2
         plt.plot([0, 300], [0, 300], color = 'k', linestyle = 'solid') # Identity
-        x_obs = []
-        y_prf = []
-        for i in range(6):
-            x_obs += RMAX_OBS[i]
-            y_prf += RMAX_FIT[i][profile]
-        a, b = np.polyfit(x_obs, y_prf, 1)
+        a, b, r2 = regression(RMAX_OBS, RMAX_FIT, i, profile)
         x = np.linspace(0, 300, 20)
         plt.plot(x, a * x + b, color = 'k', linestyle = 'dashed')
-        
-        # Plot R2 and regression coeff
-        r2 = compute_r2(x_obs, y_prf)
-        plt.text(0.7, 0.3, 'R^2 = {:.2f}\n'.format(r2) + 'y = {:.2f} * x + {:.2f}'.format(a, b), transform = ax.transAxes)
-        print(r2)
-        
-        # TODO: print R2, print y = a * x + b on the plot
+        plt.text(0.65, 0.3, r'$R^2 = {:.2f}$'.format(r2) + '\ny = {:.2f} * x + {:.2f}'.format(a, b), fontsize=14, transform = ax.transAxes)
         
         # Set legends
         ax.set_aspect('equal', adjustable='box')
-        plt.xlabel('SAR')
-        plt.ylabel(profile)
+        plt.xlabel('SAR', fontsize=16)
+        plt.ylabel(profile, fontsize=16)
         plt.legend();plt.grid()
-    
-    print(x_obs)
     
     if PARAMS['save_scatter']:
         plt.savefig(PARAMS['save_dir'] + filename)
@@ -1158,16 +1145,34 @@ def plot_scatter_vmax(VMAX_OBS, VMAX_FIT, PARAMS):
         # plt.gca().set_title(profile)
         for i in range(6):
             plt.scatter(VMAX_OBS[i], VMAX_FIT[i][profile], c=colors[i], label=labels[i])
-        plt.plot([0, 75], [0, 75], color = 'k', linestyle = 'solid')
+            
+        # Plot identity curve, linear regression and R2
+        plt.plot([0, 75], [0, 75], color = 'k', linestyle = 'solid') # Identity
+        a, b, r2 = regression(VMAX_OBS, VMAX_FIT, i, profile)
+        x = np.linspace(0, 75, 20)
+        plt.plot(x, a * x + b, color = 'k', linestyle = 'dashed')
+        plt.text(0.65, 0.3, r'$R^2 = {:.2f}$'.format(r2) + '\ny = {:.2f} * x + {:.2f}'.format(a, b), fontsize=14, transform = ax.transAxes)
+        
+        # Set legends
         ax.set_aspect('equal', adjustable='box')
-        plt.xlabel('SAR')
-        plt.ylabel(profile)
+        plt.xlabel('SAR', fontsize=16)
+        plt.ylabel(profile, fontsize=16)
         plt.legend();plt.grid()
         
     if PARAMS['save_scatter']:
         plt.savefig(PARAMS['save_dir'] + filename)
     
     return None
+
+def regression(RMAX_OBS, RMAX_FIT, i, profile):
+    x_obs = []
+    y_prf = []
+    for i in range(6):
+        x_obs += RMAX_OBS[i]
+        y_prf += RMAX_FIT[i][profile]
+    a, b = np.polyfit(x_obs, y_prf, 1)
+    r2 = compute_r2(x_obs, y_prf)
+    return a, b, r2
 
 def compute_r2(x_obs, y_prf):
     num = np.sum(np.power(np.subtract(x_obs, y_prf), 2))
