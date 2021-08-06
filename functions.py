@@ -888,7 +888,7 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
 #================================= COMPARISON BY CATEGORY =====================================
 
 
-def calculate_diff_by_cat(cat, Rmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):   
+def calculate_diff_by_cat(cat, Rmax, Vmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):   
     # Compute fitted profiles
     V_rankine              = rankine_profile(r, *FIT['Rankine'])
     V_holland              = holland_profile(r, *FIT['Holland'])
@@ -923,6 +923,18 @@ def calculate_diff_by_cat(cat, Rmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):
         diff_willou_filled  = np.concatenate((diff_willou,  [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
         diff_chavas_filled  = np.concatenate((diff_chavas,  [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
         nbcat_rank_hol_will_filled = np.concatenate((nbcat_rank_hol_will, [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
+    
+    # Normalize by Vmax to obtain V* = V/Vmax
+    if PARAMS['v_Vmax_axis']:
+        diff_rankine = np.divide(diff_rankine, Vmax)
+        diff_holland = np.divide(diff_holland, Vmax)
+        diff_willou  = np.divide(diff_willou, Vmax)
+        diff_chavas  = np.divide(diff_chavas, Vmax)
+        if PARAMS['r_Rmax_axis'] == False and PARAMS['r_window_len'] - len(spdm) > 0:
+            diff_rankine_filled = np.divide(diff_rankine_filled, Vmax)
+            diff_holland_filled = np.divide(diff_holland_filled, Vmax)
+            diff_willou_filled  = np.divide(diff_willou_filled, Vmax)
+            diff_chavas_filled  = np.divide(diff_chavas_filled, Vmax)
         
     # Determine the cat. index
     cat = np.array(cat)
@@ -954,12 +966,15 @@ def calculate_diff_by_cat(cat, Rmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):
 
 def plot_comp_by_cat(DIFF, NB_CAT, PARAMS):
     # Initialize radius
+    xlabel = 'r (km)'
+    ylabel = 'Wind speed mean difference (m/s)'
     if PARAMS['r_Rmax_axis']:
         r      = np.linspace(0., PARAMS['r_Rmax_scale'], num=PARAMS['r_Rmax_num_pts']) # axis of reference
         xlabel = 'r* = r/Rmax'
-    else:     
+    else:   
         r      = np.arange(501)
-        xlabel = 'Radius (km)'
+    if PARAMS['v_Vmax_axis']:
+        ylabel = 'V* = V/Vmax mean difference'
     
     # Define figure attributes
     filename = get_filename('all_profiles_comparison_by_category', PARAMS)
@@ -997,13 +1012,15 @@ def plot_comp_by_cat(DIFF, NB_CAT, PARAMS):
             plt.plot(r, mean_diff, color=COLORS[profile], label=profile)
             
             # Compute and plot RMSEs
-            RMSE[profile] = rmse(mean_diff, [0.] * len(mean_diff))
-        plt.text(0.4, 0.78, 'RMSEs \nRankine = {:.2f}   Holland = {:.2f}\n'.format(RMSE['Rankine'], RMSE['Holland']) + 'Willoughby = {:.2f}   Chavas = {:.2f}'.format(RMSE['Willoughby'], RMSE['Chavas']), fontsize=14, transform = ax.transAxes, bbox=dict(facecolor='white', edgecolor='k', pad=10.0))
+            RMSE[profile] = rmse(mean_diff, [0.] * len(mean_diff)) * 100
+        plt.text(0.4, 0.78, 'Mean gap (percentage of Vmax): \nRankine = {:.2f}   Holland = {:.2f}\n'.format(RMSE['Rankine'], RMSE['Holland']) + 'Willoughby = {:.2f}   Chavas = {:.2f}'.format(RMSE['Willoughby'], RMSE['Chavas']), fontsize=14, transform = ax.transAxes, bbox=dict(facecolor='white', edgecolor='k', pad=10.0))
         
         # Set legends
         plt.xlabel(xlabel, fontsize=14)
-        plt.ylabel('Wind speed (m/s)', fontsize=14)
+        plt.ylabel(ylabel, fontsize=14)
         ax.set_xticks(np.arange(0, PARAMS['r_Rmax_scale'], 1))
+        if PARAMS['v_Vmax_axis']:
+                ax.set_ylim(-0.3, 0.5)
         plt.legend();plt.grid()
     
     # Save figure
@@ -1195,10 +1212,15 @@ def compute_r2(x_obs, y_prf):
 def plot_comp_by_cat_by_quad(DIFF_QUAD, NB_CAT_QUAD, PARAMS, save):
     for i in range(6):
         # Initialize radius
+        xlabel = 'r (km)'
+        ylabel = 'Wind speed mean difference (m/s)'
         if PARAMS['r_Rmax_axis']:
-            r = np.linspace(0., PARAMS['r_Rmax_scale'], num=PARAMS['r_Rmax_num_pts']) # axis of reference
+            r      = np.linspace(0., PARAMS['r_Rmax_scale'], num=PARAMS['r_Rmax_num_pts']) # axis of reference
+            xlabel = 'r* = r/Rmax'
         else:   
-            r = np.arange(501)
+            r      = np.arange(501)
+        if PARAMS['v_Vmax_axis']:
+            ylabel = 'V* = V/Vmax mean difference'
 
         # Define figure attributes
         filename = get_filename('all_profiles_comparison_by_quadrant_cat%d' % i, PARAMS)
@@ -1224,9 +1246,12 @@ def plot_comp_by_cat_by_quad(DIFF_QUAD, NB_CAT_QUAD, PARAMS, save):
                 else:
                     mean_diff = np.divide(DIFF_QUAD[quadrant][i][profile], NB_CAT_QUAD[quadrant][i]['Rank-Hol-Will'])
                 plt.plot(r, mean_diff, color=COLORS[profile], label=profile)
-            plt.xlabel('r* = r/Rmax')
-            plt.ylabel('Wind speed (m/s)')
+                
+            plt.xlabel(xlabel)
+            plt.ylabel(ylabel)
             ax.set_xticks(np.arange(0, PARAMS['r_Rmax_scale'], 1))
+            if PARAMS['v_Vmax_axis']:
+                ax.set_ylim(-0.2, 0.5)
             plt.legend();plt.grid()
             j += 1
         
@@ -1672,4 +1697,211 @@ def print_ds(ds):
     return True
 
 
+
+
+
+#================================= LORIDAN COMPARISON =====================================
+
+def loridan_profile(r, n, X1, Y1, Vmin, Rmax, Vmax):
+    '''No polynomial ramp smoothing here.
+    We assume V(0) = Vmin != 0 to fit SAR data'''
+    V    = r * 0.
+    Vinf = (Vmax - Vmin) * ((r / Rmax) ** n) * np.exp((n - Rmax / X1) * (1 - r / Rmax)) + Vmin
+    Vsup = (Vmax - Vmin) * np.exp((-1.) * ((r - Rmax) / X1) * (r / Rmax) ** Y1) + Vmin
+    V[r <=Rmax] = Vinf[r <=Rmax]
+    V[r > Rmax] = Vsup[r > Rmax]
+    return V
+
+def initialize_loridan(spdm, n, PARAMS):
+    '''Initialize the values of n, X1, Y1, Vmin, Rmax and Vmax for the Loridan profile.
+    By default X1 = 3 * Rmax and Y1 = 0'''
+    n      = n
+    Vmin   = spdm[0] # 14
+    Rmax   = np.argmax(spdm[:PARAMS['rmax_window']]) # 40
+    X1     = 3 * Rmax
+    Y1     = 0
+    if Rmax < 5: # sometimes the TC is not well-centered and the center of the grid is on the eyewall. In this case we set Rmax = 5 because in the optimizing process we constrain Rmax > 5.
+        Rmax = 5.01
+    Vmax   = np.max(spdm[:PARAMS['rmax_window']])    # 48
+    if PARAMS['print_values']:
+        print(
+            'LORIDAN - Initial values',
+            '\n n_ini    =', "{:.2f}".format(n),
+            '\n X1_ini   =', "{:.2f}".format(X1),
+            '\n Y1_ini   =', "{:.2f}".format(X1),
+            '\n Vmin_ini =', "{:.2f}".format(Vmin),
+            '\n Rmax_ini =', "{:.2f}".format(Rmax),
+            '\n Vmax_ini =', "{:.2f}".format(Vmax),
+        )
+    return n, X1, Y1, Vmin, Rmax, Vmax
+
+def fit_loridan(r, spdm, n, X1, Y1, Vmin, Rmax, Vmax, PARAMS):
+    '''Fit the Loridan profile given initial values of n, X1, Vmin, Rmax, Vmax.
+    Returns the optimal parameters found with curve_fit()'''
+    if PARAMS['rank_hol_will_vmin']: # fit using Vmin
+        popt, pcov              = curve_fit(loridan_profile, r, spdm, p0=[n, X1, Y1, Vmin, Rmax, Vmax], bounds=((0, 0, -1, 0, 5, 0), (50, 5000, 0, 50, 500, PARAMS['rmax_window'])))
+        n, X1, Y1, Vmin, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3], popt[4], popt[5]
+    else:
+        popt, pcov              = curve_fit(lambda r, n, X1, Y1, Rmax, Vmax: loridan_profile(r, n, X1, Y1, 0., Rmax, Vmax), r, spdm, p0=[n, X1, Y1, Rmax, Vmax], bounds=((0, 0, -1, 5, 0), (50, 5000, 0, 500, PARAMS['rmax_window'])))
+        n, X1, Rmax, Vmax = popt[0], popt[1], popt[2], popt[3], popt[4]
+        Vmin = 0.0
+    if PARAMS['print_values']:
+        print(
+            'LORIDAN - Fit values',
+            '\n n_fit    =', "{:.2f}".format(n),
+            '\n X1_fit   =', "{:.2f}".format(X1),
+            '\n Y1_fit   =', "{:.2f}".format(Y1),
+            '\n Vmin_fit =', "{:.2f}".format(Vmin),
+            '\n Rmax_fit =', "{:.2f}".format(Rmax),
+            '\n Vmax_fit =', "{:.2f}".format(Vmax)
+        )
+    return n, X1, Y1, Vmin, Rmax, Vmax
+
+def calculate_diff_by_cat_loridan(cat, Rmax, Vmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARAMS):   
+    # Compute fitted profiles
+    V_rankine              = rankine_profile(r, *FIT['Rankine'])
+    V_holland              = holland_profile(r, *FIT['Holland'])
+    V_willoughby_no_smooth = willoughby_profile_no_smooth(r, *FIT['Willoughby'])
+    V_loridan              = loridan_profile(r, *FIT['Loridan'])
+    
+    # Initialize NB_CAT for each profile
+    nbcat_rank_hol_will = [1] * len(spdm)
+        
+    # Compute difference between obs and profile
+    diff_rankine = np.subtract(V_rankine, spdm)
+    diff_holland = np.subtract(V_holland, spdm)
+    diff_willou  = np.subtract(V_willoughby_no_smooth, spdm)
+    diff_loridan = np.subtract(V_loridan, spdm)
+    if PARAMS['r_window_len'] - len(spdm) > 0:
+        diff_rankine_filled = np.concatenate((diff_rankine, [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
+        diff_holland_filled = np.concatenate((diff_holland, [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
+        diff_willou_filled  = np.concatenate((diff_willou,  [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
+        diff_loridan_filled = np.concatenate((diff_loridan, [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
+        nbcat_rank_hol_will_filled = np.concatenate((nbcat_rank_hol_will, [0] * (PARAMS['r_window_len'] - len(spdm))), axis=0)
+    
+    # Normalize by Vmax to obtain V* = V/Vmax
+    if PARAMS['v_Vmax_axis']:
+        diff_rankine = np.divide(diff_rankine, Vmax)
+        diff_holland = np.divide(diff_holland, Vmax)
+        diff_willou  = np.divide(diff_willou, Vmax)
+        diff_loridan = np.divide(diff_loridan, Vmax)
+        if PARAMS['r_Rmax_axis'] == False and PARAMS['r_window_len'] - len(spdm) > 0:
+            diff_rankine_filled = np.divide(diff_rankine_filled, Vmax)
+            diff_holland_filled = np.divide(diff_holland_filled, Vmax)
+            diff_willou_filled  = np.divide(diff_willou_filled, Vmax)
+            diff_loridan_filled = np.divide(diff_loridan_filled, Vmax)
+        
+    # Determine the cat. index
+    cat = np.array(cat)
+    if cat == 'storm' or cat == 'dep':
+        i = 0
+    else: # then it's 'cat-0', 1, ..., or 5
+        i = int(str(cat)[-1])
+    
+    # Update DIFF and NB_CAT
+    if PARAMS['r_Rmax_axis']:
+        r_star = np.linspace(0., PARAMS['r_Rmax_scale'], num=PARAMS['r_Rmax_num_pts']) # axis of reference
+        r_Rmax = np.divide(r, Rmax)
+        # print(len(diff_rankine))
+        DIFF[i]['Rankine']   += np.interp(r_star, r_Rmax, diff_rankine) # CAVEAT: if r[500]/Rmax < 16 then np.interp() still fills the vector with the value of diff_rankine[-1]
+        DIFF[i]['Holland']   += np.interp(r_star, r_Rmax, diff_holland)
+        DIFF[i]['Willoughby']+= np.interp(r_star, r_Rmax, diff_willou)
+        DIFF[i]['Loridan']   += np.interp(r_star, r_Rmax, diff_loridan)
+        NB_CAT[i]['Rank-Hol-Will']+= np.interp(r_star, r_Rmax, nbcat_rank_hol_will)       
+    else:
+        DIFF[i]['Rankine']   += diff_rankine_filled
+        DIFF[i]['Holland']   += diff_holland_filled
+        DIFF[i]['Willoughby']+= diff_willou_filled
+        DIFF[i]['Loridan']    += diff_loridan_filled
+        NB_CAT[i]['Rank-Hol-Will'] = np.add(NB_CAT[i]['Rank-Hol-Will'], nbcat_rank_hol_will_filled)
+        
+    return DIFF, NB_CAT
+                                                     
+def add_to_scatter_list_loridan(cat, r, Rmax, Vmax, FIT, RMAX_OBS, RMAX_FIT, VMAX_OBS, VMAX_FIT, PARAMS):
+    # Determine the cat. index
+    cat = np.array(cat)
+    if cat == 'storm' or cat == 'dep':
+        i = 0
+    else: # then it's 'cat-0', 1, ..., or 5
+        i = int(str(cat)[-1])
+        
+    # Update Rmax lists
+    rmax_win = PARAMS['rmax_window']
+    if Rmax < rmax_win and FIT['Rankine'][3] < rmax_win and FIT['Holland'][4] < rmax_win and FIT['Willoughby'][3] < rmax_win:
+        RMAX_OBS[i].append(Rmax)
+        RMAX_FIT[i]['Rankine'].append(FIT['Rankine'][3])
+        RMAX_FIT[i]['Holland'].append(FIT['Holland'][4])
+        RMAX_FIT[i]['Willoughby'].append(FIT['Willoughby'][3])
+        RMAX_FIT[i]['Loridan'].append(FIT['Loridan'][4])
+        
+        VMAX_OBS[i].append(Vmax)
+        V_rankine = rankine_profile(r, *FIT['Rankine'])
+        VMAX_FIT[i]['Rankine'].append(np.max(V_rankine[:rmax_win]))
+        VMAX_FIT[i]['Holland'].append(FIT['Holland'][5])
+        VMAX_FIT[i]['Willoughby'].append(FIT['Willoughby'][4])
+        VMAX_FIT[i]['Loridan'].append(np.max(FIT['Loridan'][5]))
+        
+    return RMAX_OBS, RMAX_FIT, VMAX_OBS, VMAX_FIT
+                                                     
+def plot_comp_by_cat_loridan(DIFF, NB_CAT, PARAMS):
+    # Initialize radius
+    xlabel = 'r (km)'
+    ylabel = 'Wind speed mean difference (m/s)'
+    if PARAMS['r_Rmax_axis']:
+        r      = np.linspace(0., PARAMS['r_Rmax_scale'], num=PARAMS['r_Rmax_num_pts']) # axis of reference
+        xlabel = 'r* = r/Rmax'
+    else:   
+        r      = np.arange(501)
+    if PARAMS['v_Vmax_axis']:
+        ylabel = 'V* = V/Vmax mean difference'
+    
+    # Define figure attributes
+    filename = get_filename('all_profiles_comparison_by_category', PARAMS)
+    fig = plt.figure(figsize=(25, 35))
+    plt.suptitle("Mean difference between SAR wind speed and common parametric profiles", fontsize=18)
+    COLORS = {
+        'Rankine':    'darkorange',
+        'Holland':    'steelblue',
+        'Willoughby': 'orchid',
+        'Loridan':     'forestgreen'
+    }
+    subtitles = ['Storm', 'Cat.1', 'Cat.2', 'Cat.3', 'Cat.4', 'Cat.5']
+    
+    # Print TC number in each cat:
+    print("Number of TCs in each categories:")
+    print("Storm:  ", int(np.max(NB_CAT[0]['Rank-Hol-Will'])))
+    for i in range(1, 6):
+        print("Cat.", i, ":", int(np.max(NB_CAT[i]['Rank-Hol-Will'])))
+    
+    # Plot curves
+    for i in range(6):
+        RMSE = {
+        'Rankine':    0.,
+        'Holland':    0.,
+        'Willoughby': 0.,
+        'Loridan':     0. 
+        }
+        ax = fig.add_subplot(6, 1, i + 1)
+        plt.gca().set_title(subtitles[i], fontsize=16)
+        for profile in DIFF[i].keys():
+            mean_diff = np.divide(DIFF[i][profile], NB_CAT[i]['Rank-Hol-Will'])
+            plt.plot(r, mean_diff, color=COLORS[profile], label=profile)
+            
+            # Compute and plot RMSEs
+            RMSE[profile] = rmse(mean_diff, [0.] * len(mean_diff)) * 100
+        plt.text(0.4, 0.78, 'Mean gap (percentage of Vmax): \nRankine = {:.2f}       Holland = {:.2f}\n'.format(RMSE['Rankine'], RMSE['Holland']) + 'Willoughby = {:.2f}   Loridan = {:.2f}'.format(RMSE['Willoughby'], RMSE['Loridan']), fontsize=14, transform = ax.transAxes, bbox=dict(facecolor='white', edgecolor='k', pad=10.0))
+        
+        # Set legends
+        plt.xlabel(xlabel, fontsize=14)
+        plt.ylabel(ylabel, fontsize=14)
+        ax.set_xticks(np.arange(0, PARAMS['r_Rmax_scale'], 1))
+        if PARAMS['v_Vmax_axis']:
+                ax.set_ylim(-0.2, 0.15)
+        plt.legend();plt.grid()
+    
+    # Save figure
+    if PARAMS['save_comparison']:
+        plt.savefig(PARAMS['save_dir'] + filename)
+        
+    return None                                                  
 
