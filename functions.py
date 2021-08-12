@@ -7,6 +7,7 @@ from scipy.interpolate import interp1d
 from scipy.optimize import curve_fit
 from shapely.geometry import Point, LineString
 import os.path
+# matplotlib.rcParams.update({'font.size': 18})
 
 #================================= PROFILE FUNCTIONS =====================================
 
@@ -893,7 +894,7 @@ def calculate_diff_by_cat(cat, Rmax, Vmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARA
     V_rankine              = rankine_profile(r, *FIT['Rankine'])
     V_holland              = holland_profile(r, *FIT['Holland'])
     V_willoughby_no_smooth = willoughby_profile_no_smooth(r, *FIT['Willoughby'])
-    V_chavas               = FIT['Chavas'][1]         # Different from other profiles: here V_chavas has already been computed before, and is stored in FIT['Chavas'][1]
+    V_chavas               = FIT['Chavas'][1]         # Different from other profiles: here V_chavas has already been computed before, and is stored in FIT['Chavas'][1]
     r_chavas               = FIT['Chavas'][0] / 1000. # Convert from m to km 
     
     # Re-scale Chavas
@@ -912,7 +913,7 @@ def calculate_diff_by_cat(cat, Rmax, Vmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARA
     if len(V_chavas500) < len(spdm):
         V_chavas500 = np.concatenate((V_chavas500, spdm[len(V_chavas500):]), axis=0)
         
-    # Compute difference between obs and profile
+    # Compute difference between obs and profile
     diff_rankine = np.subtract(V_rankine, spdm)
     diff_holland = np.subtract(V_holland, spdm)
     diff_willou  = np.subtract(V_willoughby_no_smooth, spdm)
@@ -947,8 +948,8 @@ def calculate_diff_by_cat(cat, Rmax, Vmax, r, spdm, INI, FIT, DIFF, NB_CAT, PARA
     if PARAMS['r_Rmax_axis']:
         r_star = np.linspace(0., PARAMS['r_Rmax_scale'], num=PARAMS['r_Rmax_num_pts']) # axis of reference
         r_Rmax = np.divide(r, Rmax)
-        # print(len(diff_rankine))
-        DIFF[i]['Rankine']   += np.interp(r_star, r_Rmax, diff_rankine) # CAVEAT: if r[500]/Rmax < 16 then np.interp() still fills the vector with the value of diff_rankine[-1]
+        # print(len(diff_rankine))
+        DIFF[i]['Rankine']   += np.interp(r_star, r_Rmax, diff_rankine) # CAVEAT: if r[500]/Rmax < 16 then np.interp() still fills the vector with the value of diff_rankine[-1]
         DIFF[i]['Holland']   += np.interp(r_star, r_Rmax, diff_holland)
         DIFF[i]['Willoughby']+= np.interp(r_star, r_Rmax, diff_willou)
         DIFF[i]['Chavas']    += np.interp(r_star, r_Rmax, diff_chavas)
@@ -1905,3 +1906,105 @@ def plot_comp_by_cat_loridan(DIFF, NB_CAT, PARAMS):
         
     return None                                                  
 
+def save_curves_loridan(i, file, ds, r, spdm, INI, FIT, PARAMS):
+    # Save path and name
+    i        = '{0:03}'.format(i) # convert 1 to '001'
+    filename = os.path.basename(os.path.splitext(file)[0])
+    filename = 'wProfiles' + i + '_' + filename
+    savepath = PARAMS['save_dir'] + filename
+    
+    # Title
+    plt.figure(figsize=(25, 19))
+    plt.suptitle('N°' + i + ": " + os.path.basename(file), fontsize=14)
+    
+    # Print TC and spd
+    plt.subplot(2, 2, 1)
+    plt.pcolormesh(ds['x_coords'], ds['y_coords'], ds['wind_speed']);plt.grid()
+    plt.subplot(2, 2, 2)
+    radius     = np.arange(501)
+    th         = np.arange(361)
+    radius, th = np.meshgrid(radius, th)
+    ds_r       = np.array(ds['r_polar'])
+    ds_th      = np.mod(np.array(ds['theta']) * 180. / np.pi, 360) # convert theta from radians to degrees
+    ds_ws      = np.array(ds['wind_speed'])
+    # Possible to call griddata() without using meshgrid() before? 
+    spd        = griddata((ds_r.flatten(), ds_th.flatten()), ds_ws.flatten(), (radius, th), method='nearest')
+    plt.pcolormesh(spd)
+    
+    # Compute fitted profiles
+    V_rankine              = rankine_profile(r, *FIT['Rankine'])
+    V_holland              = holland_profile(r, *FIT['Holland'])
+    V_willoughby_no_smooth = willoughby_profile_no_smooth(r, *FIT['Willoughby'])
+    V_loridan              = loridan_profile(r, *FIT['Loridan'])
+    Rmax = INI['Holland'][4] # Center on Rmax
+    
+    # Set labels
+    LABELS = {}
+    for profile in INI.keys():
+        LABELS[profile] = profile + ' profile'
+    label_SAR    = 'SAR total wind sped'
+    if PARAMS['tangential_wind_speed']:
+        label_SAR = 'SAR tangential wind speed'
+        
+    # Large scale
+    plt.subplot(2, 2, 3)
+    fig1 = plt.plot(r, spdm, color='k', linewidth=3,            label=label_SAR)        
+    fig2 = plt.plot(r, V_rankine, color='darkorange',           label=LABELS['Rankine'])   
+    fig3 = plt.plot(r, V_holland, color='steelblue',            label=LABELS['Holland'])   
+    fig4 = plt.plot(r, V_willoughby_no_smooth, color='orchid',  label=LABELS['Willoughby']) 
+    fig5 = plt.plot(r, V_loridan, color='forestgreen',          label=LABELS['Loridan'])  
+    
+    plt.xlabel('Radius (km)', fontsize=14)
+    plt.ylabel('Wind speed (m/s)', fontsize=14)
+    plt.legend();plt.grid()
+
+    # Small scale
+    plt.subplot(2, 2, 4)
+    if Rmax >= 25:
+        fig6 = plt.plot(r[Rmax - 25 : Rmax + 25], spdm[Rmax - 25 : Rmax + 25], color='k', linewidth=3, label=label_SAR)
+        fig7 = plt.plot(r[Rmax - 25 : Rmax + 25], V_rankine[Rmax - 25 : Rmax + 25], color='darkorange', label=LABELS['Rankine'])
+        fig8 = plt.plot(r[Rmax - 25 : Rmax + 25], V_holland[Rmax - 25 : Rmax + 25], color='steelblue',  label=LABELS['Holland']) 
+        fig9 = plt.plot(r[Rmax - 25 : Rmax + 25], V_willoughby_no_smooth[Rmax - 25 : Rmax + 25], color='orchid',  label=LABELS['Willoughby'])
+        fig10 = plt.plot(r[Rmax - 25 : Rmax + 25], V_loridan[Rmax - 25 : Rmax + 25], color='forestgreen',  label=LABELS['Loridan'])  
+    else:
+        fig6 = plt.plot(r[:50], spdm[:50], color='k', linewidth=3, label=label_SAR)             
+        fig7 = plt.plot(r[:50], V_rankine[:50], color='darkorange', label=LABELS['Rankine'])  
+        fig8 = plt.plot(r[:50], V_holland[:50], color='steelblue',  label=LABELS['Holland'])    
+        fig9 = plt.plot(r[:50], V_willoughby_no_smooth[:50], color='orchid',  label=LABELS['Willoughby'])
+        fig10 = plt.plot(r[:50], V_loridan[:50], color='forestgreen',  label=LABELS['Loridan']) 
+
+    plt.xlabel('Radius (km)', fontsize=14)
+    plt.ylabel('Wind speed (m/s)', fontsize=14)
+    plt.legend();plt.grid()
+    plt.savefig(savepath)
+    
+    # SAVE INITIAL AND FIT VALUES
+    text_file = open(savepath + ".txt", "w")
+    text_file.write("========================== FITTING COMMON WIND PROFILES ON SAR DATA ==========================\n" + filename + "\n\n\n")
+    text_file.write("RANKINE\n") # x, alpha, Vmin, Rmax
+    text_file.write("x_ini     = {:.2f}".format(INI['Rankine'][0]) + '   | x_fit     = {:.2f}\n'.format(FIT['Rankine'][0]))
+    text_file.write("alpha_ini = {:.2f}".format(INI['Rankine'][1]) + '   | alpha_fit = {:.2f}\n'.format(FIT['Rankine'][1]))
+    text_file.write("Vmin_ini  = {:.2f}".format(INI['Rankine'][2]) + '  | Vmin_fit  = {:.2f}\n'.format(FIT['Rankine'][2]))
+    text_file.write("Rmax_ini  = {:.2f}".format(INI['Rankine'][3]) + '  | Rmax_fit  = {:.2f}\n\n'.format(FIT['Rankine'][3]))
+    text_file.write("HOLLAND\n") # Lat, pn, pc, Vmin, Rmax, Vmax
+    text_file.write("Lat      = {:.2f}\n".format(INI['Holland'][0]))
+    text_file.write("pn_ini   = {:.2f}".format(INI['Holland'][1] / 100) + ' | pn_fit   = {:.2f}\n'.format(FIT['Holland'][1] / 100))
+    text_file.write("pc_ini   = {:.2f}".format(INI['Holland'][2]/ 100) + '  | pc_fit   = {:.2f}\n'.format(FIT['Holland'][2] / 100))
+    text_file.write("Vmin_ini = {:.2f}".format(INI['Holland'][3]) + '   | Vmin_fit = {:.2f}\n'.format(FIT['Holland'][3]))
+    text_file.write("Rmax_ini = {:.2f}".format(INI['Holland'][4]) + '   | Rmax_fit = {:.2f}\n'.format(FIT['Holland'][4]))
+    text_file.write("Vmax_ini = {:.2f}".format(INI['Holland'][5]) + '   | Vmax_fit = {:.2f}\n\n'.format(FIT['Holland'][5]))
+    text_file.write("WILLOUGHBY\n") # n, X1, Vmin, Rmax, Vmax
+    text_file.write("n_ini    = {:.2f}".format(INI['Willoughby'][0]) + '    | n_fit    = {:.2f}\n'.format(FIT['Willoughby'][0]))
+    text_file.write("X1_ini   = {:.2f}".format(INI['Willoughby'][1]) + '   | X1_fit   = {:.2f}\n'.format(FIT['Willoughby'][1]))
+    text_file.write("Vmin_ini = {:.2f}".format(INI['Willoughby'][2]) + '   | Vmin_fit = {:.2f}\n'.format(FIT['Willoughby'][2]))
+    text_file.write("Rmax_ini = {:.2f}".format(INI['Willoughby'][3]) + '   | Rmax_fit = {:.2f}\n'.format(FIT['Willoughby'][3]))
+    text_file.write("Vmax_ini = {:.2f}".format(INI['Willoughby'][4]) + '   | Vmax_fit = {:.2f}\n\n'.format(FIT['Willoughby'][4]))
+    text_file.write("LORIDAN\n") # n, X1, Y1, Vmin, Rmax, Vmax
+    text_file.write("n_ini    = {:.2f}".format(INI['Loridan'][0]) + '    | n_fit    = {:.2f}\n'.format(FIT['Loridan'][0]))
+    text_file.write("X1_ini   = {:.2f}".format(INI['Loridan'][1]) + '   | X1_fit   = {:.2f}\n'.format(FIT['Loridan'][1]))
+    text_file.write("Y1_ini   = {:.2f}".format(INI['Loridan'][2]) + '   | Y1_fit   = {:.2f}\n'.format(FIT['Loridan'][2]))
+    text_file.write("Vmin_ini = {:.2f}".format(INI['Loridan'][3]) + '   | Vmin_fit = {:.2f}\n'.format(FIT['Loridan'][3]))
+    text_file.write("Rmax_ini = {:.2f}".format(INI['Loridan'][4]) + '   | Rmax_fit = {:.2f}\n'.format(FIT['Loridan'][4]))
+    text_file.write("Vmax_ini = {:.2f}".format(INI['Loridan'][5]) + '   | Vmax_fit = {:.2f}\n\n'.format(FIT['Loridan'][5]))
+    
+    return True
