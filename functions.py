@@ -768,7 +768,15 @@ def save_curves(i, file, ds, r, spdm, INI, FIT, PARAMS):
     i        = '{0:03}'.format(i) # convert 1 to '001'
     filename = os.path.basename(os.path.splitext(file)[0])
     filename = 'wProfiles' + i + '_' + filename
-    savepath = PARAMS['save_dir'] + filename
+    
+    # Save by category
+    subfolder = ['storms/', 'cat1/', 'cat2/', 'cat3/', 'cat4/', 'cat5/',]
+    cat       = np.array(ds['current_category'])
+    if cat == 'storm' or cat == 'dep':
+        cat_nb = 0
+    else: # then it's 'cat-0', 1, ..., or 5
+        cat_nb = int(str(cat)[-1])
+    savepath = PARAMS['save_dir'] + subfolder[cat_nb] + filename
     
     # Title
     plt.figure(figsize=(25, 19))
